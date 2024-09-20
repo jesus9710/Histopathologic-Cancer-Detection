@@ -182,7 +182,7 @@ def predict_model(model, dataloader):
     return soft_preds
 
 
-def train(model, epochs, criterion, optimizer, scheduler, train_dataloader, val_dataloader = None, early_stopping = 10, early_reset = 5, min_eta = 1e-3, save_path = None, from_auroc = None):
+def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader = None, scheduler = None, early_stopping = 10, early_reset = None, min_eta = 1e-3, cv_fold = None, save_path = None, from_auroc = None):
 
     best_model_wts = deepcopy(model.state_dict())
 
@@ -197,6 +197,11 @@ def train(model, epochs, criterion, optimizer, scheduler, train_dataloader, val_
     else:
         best_epoch_auroc = from_auroc
         ft_str = 'ft_'
+
+    if cv_fold is None:
+        cv_fold = ''
+    else:
+        cv_fold = '_Fold' + str(cv_fold)
 
     history = defaultdict(list)
     max_count = early_stopping
@@ -221,7 +226,7 @@ def train(model, epochs, criterion, optimizer, scheduler, train_dataloader, val_
             print(f"Validation AUROC Improved ({best_epoch_auroc} ---> {val_auroc}), epoch: {epoch}")
             best_epoch_auroc = val_auroc
             best_model_wts = deepcopy(model.state_dict())
-            FILE = ft_str + "AUROC{:.4f}_Loss{:.4f}_epoch{:.0f}.bin".format(val_auroc, val_loss, epoch)
+            FILE = ft_str + "AUROC{:.4f}_Loss{:.4f}".format(val_auroc, val_loss) + cv_fold + ".bin"
             if save_path:
                 torch.save(model.state_dict(), save_path / FILE)
             count = 0

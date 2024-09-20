@@ -24,7 +24,7 @@ MODEL_LOGS_PATH = ROOT_PATH / 'Models/'
 
 TEST_IMAGE_PATH = ROOT_PATH / 'Data/test-images'
 
-SUBMISSION_PATH = ROOT_PATH / 'Submissions/TTA'
+SUBMISSION_PATH = ROOT_PATH / 'Submissions/4_TTA'
 
 with open(CONFIG_PATH, 'r', encoding='utf-8') as file:
     config = yaml.safe_load(file)
@@ -49,7 +49,6 @@ model.to(config.misc.device)
 # %% Transformations
 
 tta_transforms = [
-
     A.Compose([A.RandomBrightnessContrast(brightness_limit=0.2, contrast_limit=0.2, p=1),
                A.Resize(config.data.parameters.img_size, config.data.parameters.img_size),
                A.Normalize(
@@ -84,7 +83,7 @@ tta_transforms = [
                    std=[0.229, 0.224, 0.225], 
                    max_pixel_value=255.0, 
                    p=1.0),
-               ToTensorV2()], p=1.)
+               ToTensorV2()], p=1.),
 ]
 
 # %% predictions

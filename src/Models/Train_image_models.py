@@ -54,19 +54,6 @@ id_wsi_df = pd.read_csv(ID_WSI_PATH)
 # df = df.merge(id_wsi_df, on='id', how='left')
 df = pd.merge(df, id_wsi_df, on='id')
 
-# %% under-sampling
-
-if config.data.sampling.downsample:
-
-    half_len_dataset = int(np.floor(config.data.sampling.downsample_quantity / 2))
-
-    df_positive = df[df['label'] == 1].iloc[:half_len_dataset,:]
-    df_negative = df[df['label'] == 0].iloc[:half_len_dataset,:]
-
-    num_positive = df_positive.shape[0]
-
-    df = pd.concat([df_positive, df_negative], axis=0).reset_index(drop=True)
-
 # %% K-folds
 
 sgkf = StratifiedGroupKFold(n_splits=config.data.sampling.n_fold)
@@ -80,27 +67,20 @@ df.kfold = df.kfold.astype('int')
 
 data_transforms = {
     "train": A.Compose([
-        A.VerticalFlip(p=0.2),
-        A.RandomRotate90(p=0.2),
-        A.HorizontalFlip(p=0.2),
+        A.VerticalFlip(p=0.3),
+        A.RandomRotate90(p=0.3),
+        A.HorizontalFlip(p=0.3),
         A.HueSaturationValue(
                 hue_shift_limit=0.1, 
                 sat_shift_limit=0.1, 
                 val_shift_limit=0.1, 
-                p=0.3
+                p=0.2
             ),
         A.RandomBrightnessContrast(
                 brightness_limit=(-0.1,0.1), 
                 contrast_limit=(-0.1, 0.1), 
-                p=0.3
+                p=0.2
             ),
-        A.OneOf([
-            A.MotionBlur(blur_limit=5),
-            A.MedianBlur(blur_limit=5),
-            A.GaussianBlur(blur_limit=5),
-            A.GaussNoise(var_limit=(5.0, 30.0)),
-            ], p=0.3),
-        A.CLAHE(clip_limit=4.0, p=0.7),
         A.Resize(config.data.parameters.img_size, config.data.parameters.img_size),
         A.Normalize(
                 mean=[0.485, 0.456, 0.406], 
@@ -159,13 +139,24 @@ optimizer = torch.optim.Adam(model.parameters(), lr=config.model.parameters.lear
 df_train = df[df.kfold != fold].reset_index(drop=True)
 df_valid = df[df.kfold == fold].reset_index(drop=True)
 
+if config.data.sampling.valid_downsample:
+
+    half_len_dataset = int(np.floor(config.data.sampling.downsample_quantity / 2))
+
+    df_positive = df_valid[df_valid['label'] == 1].sample(half_len_dataset, random_state=config.misc.seed)
+    df_negative = df_valid[df_valid['label'] == 0].sample(half_len_dataset, random_state=config.misc.seed)
+
+    num_positive = df_positive.shape[0]
+
+    df_valid = pd.concat([df_positive, df_negative], axis=0).reset_index(drop=True)
+
 if config.data.sampling.Random_sampling:
     train_dataset = HCD_Dataset_for_training(TRAIN_IMAGES_PATH, df_train, data_size=config.data.sampling.Rnd_sampling_q, transforms=data_transforms["train"])
-    valid_dataset = HCD_Dataset_for_training(TRAIN_IMAGES_PATH, df_valid, data_size=config.data.sampling.Rnd_sampling_q, transforms=data_transforms["valid"])
 
 else:
     train_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_train, transforms=data_transforms["train"])
-    valid_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_valid, transforms=data_transforms["valid"])
+
+valid_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_valid, transforms=data_transforms["valid"])
 
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.data.parameters.train_batch_size, 
                             num_workers=0, shuffle=True, pin_memory=False, drop_last=False)

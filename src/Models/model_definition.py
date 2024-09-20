@@ -166,6 +166,29 @@ class HCD_Model_Swin(torch.nn.Module):
         pooled_features = self.pooling(features).flatten(1)
         output = self.sigmoid(self.linear(pooled_features))
         return output
+    
+class HCD_Model_ViT(torch.nn.Module):
+
+    def __init__(self, model_name, num_classes=1, pretrained=True, checkpoint_path=None, freeze_params = True, device = torch.device('cuda')):
+        super(HCD_Model_ViT, self).__init__()
+        model = timm.create_model(model_name=model_name, pretrained=pretrained, checkpoint_path=checkpoint_path)
+        self.model = model.to(device)
+
+        in_features = self.model.head.in_features
+
+        self.model.head = torch.nn.Identity()
+
+        if freeze_params:
+            for param in self.model.parameters():
+                param.requires_grad = False
+
+        self.linear = torch.nn.Linear(in_features, num_classes)
+        self.sigmoid = torch.nn.Sigmoid()
+
+    def forward(self, images):
+        features = self.model(images)
+        output = self.sigmoid(self.linear(features))
+        return output
 
 # Diccionario para mapear configuración y clases
 maping_model = {"HCD_Model_ResNet" : HCD_Model_ResNet,
@@ -173,4 +196,5 @@ maping_model = {"HCD_Model_ResNet" : HCD_Model_ResNet,
                "HCD_Model_EffNet" : HCD_Model_EffNet,
                "HCD_Simple_Model" : HCD_Simple_Model,
                "HCD_Model_ConvNext": HCD_Model_ConvNext,
-               "HCD_Model_Swin": HCD_Model_Swin}
+               "HCD_Model_Swin": HCD_Model_Swin,
+               "HCD_Model_ViT": HCD_Model_ViT}
