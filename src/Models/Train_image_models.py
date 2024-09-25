@@ -8,20 +8,17 @@ import torch.utils
 import torch.utils.data
 from torch.optim import lr_scheduler
 import torch.utils.data.dataloader
-import albumentations as A
-from albumentations.pytorch import ToTensorV2
 
 from sklearn.model_selection import StratifiedGroupKFold
 
 from pathlib import Path
-import yaml
 import json
 
 from utils import *
+from transformations import *
 from model_definition import *
 
 import os
-import gc
 
 # %% paths and configuration
 
@@ -29,20 +26,14 @@ ROOT_PATH = Path(__file__).parents[2]
 
 CONFIG_PATH = ROOT_PATH / 'src/Configuration/Config.yml'
 
-with open(CONFIG_PATH, 'r', encoding='utf-8') as file:
-    config = yaml.safe_load(file)
-
-config = Dotenv(config)
-config.misc.device = torch.device('cuda') if config.misc.device == 'cuda' else torch.device('cpu')
+config = load_config(CONFIG_PATH)
 
 TRAIN_IMAGES_PATH = ROOT_PATH / 'Data/train-images'
 TEST_IMAGES_PATH = ROOT_PATH / 'Data/test-images'
 LABELS_PATH = ROOT_PATH / 'Data/raw-metadata/train_labels.csv'
 ID_WSI_PATH = ROOT_PATH / 'Data/raw-metadata/patch_id_wsi_full.csv'
-
-MODEL_LOGS_PATH = ROOT_PATH / 'Models/' / (config.model.architecture.model_name + '/')
-
 SUBMISSION_PATH = ROOT_PATH / 'Submissions'
+MODEL_LOGS_PATH = ROOT_PATH / 'Models/' / (config.model.architecture.model_name + '/')
 
 # set_seed(config.misc.seed)
 
@@ -51,8 +42,7 @@ SUBMISSION_PATH = ROOT_PATH / 'Submissions'
 df = pd.read_csv(LABELS_PATH)
 id_wsi_df = pd.read_csv(ID_WSI_PATH)
 
-# df = df.merge(id_wsi_df, on='id', how='left')
-df = pd.merge(df, id_wsi_df, on='id')
+df = df.merge(id_wsi_df, on='id', how='left')
 
 # %% K-folds
 
@@ -65,42 +55,7 @@ df.kfold = df.kfold.astype('int')
 
 # %% Augmentations
 
-data_transforms = {
-    "train": A.Compose([
-        A.VerticalFlip(p=0.3),
-        A.RandomRotate90(p=0.3),
-        A.HorizontalFlip(p=0.3),
-        A.HueSaturationValue(
-                hue_shift_limit=0.1, 
-                sat_shift_limit=0.1, 
-                val_shift_limit=0.1, 
-                p=0.2
-            ),
-        A.RandomBrightnessContrast(
-                brightness_limit=(-0.1,0.1), 
-                contrast_limit=(-0.1, 0.1), 
-                p=0.2
-            ),
-        A.Resize(config.data.parameters.img_size, config.data.parameters.img_size),
-        A.Normalize(
-                mean=[0.485, 0.456, 0.406], 
-                std=[0.229, 0.224, 0.225], 
-                max_pixel_value=255.0, 
-                p=1.0
-            ),
-        ToTensorV2()], p=1.),
-    
-    "valid": A.Compose([
-        A.Resize(config.data.parameters.img_size, config.data.parameters.img_size),
-        A.Normalize(
-                mean=[0.485, 0.456, 0.406], 
-                std=[0.229, 0.224, 0.225], 
-                max_pixel_value=255.0, 
-                p=1.0
-            ),
-        ToTensorV2()], p=1.)
-}
-
+data_transforms = get_transforms(config.data.parameters.img_size)
 
 # %% Modelling
 
@@ -136,6 +91,8 @@ criterion = torch.nn.BCELoss()
 optimizer = torch.optim.Adam(model.parameters(), lr=config.model.parameters.learning_rate, 
                        weight_decay=config.model.parameters.weight_decay)
 
+# %% Dataloaders
+
 df_train = df[df.kfold != fold].reset_index(drop=True)
 df_valid = df[df.kfold == fold].reset_index(drop=True)
 
@@ -145,8 +102,6 @@ if config.data.sampling.valid_downsample:
 
     df_positive = df_valid[df_valid['label'] == 1].sample(half_len_dataset, random_state=config.misc.seed)
     df_negative = df_valid[df_valid['label'] == 0].sample(half_len_dataset, random_state=config.misc.seed)
-
-    num_positive = df_positive.shape[0]
 
     df_valid = pd.concat([df_positive, df_negative], axis=0).reset_index(drop=True)
 
@@ -167,7 +122,14 @@ valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=config.data
 
 if config.model.parameters.scheduler == 'CosineAnnealingLR':
 
-    T_max = df.shape[0] * (config.data.sampling.n_fold-1) * config.model.parameters.epochs // config.data.parameters.train_batch_size // config.data.sampling.n_fold # decaimiento suave a lo largo de todo el entrenamiento
+    if config.data.sampling.Random_sampling:
+
+        T_max = config.data.sampling.Rnd_sampling_q * config.model.parameters.epochs // config.data.parameters.train_batch_size
+        
+    else:
+
+        T_max = df.shape[0] * (config.data.sampling.n_fold-1) * config.model.parameters.epochs // config.data.parameters.train_batch_size // config.data.sampling.n_fold
+    
     scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=T_max, eta_min=config.model.parameters.min_lr)
 
 elif config.model.parameters.scheduler == 'OneCycle':
@@ -180,28 +142,43 @@ else:
 
 # %% Training
 
-if config.model.mode.train_model:
+if config.model.parameters.save_checkpoints:
+    os.makedirs(MODEL_LOGS_PATH, exist_ok=True)
+    save_path = MODEL_LOGS_PATH
+else:
+    save_path = None
 
-    if config.model.mode.save_checkpoints:
-        os.makedirs(MODEL_LOGS_PATH, exist_ok=True)
-        save_path = MODEL_LOGS_PATH
-    else:
-        save_path = None
+model, history = train(model,
+                    epochs = config.model.parameters.epochs,
+                    criterion = criterion,
+                    optimizer = optimizer,
+                    scheduler = scheduler,
+                    train_dataloader = train_loader,
+                    val_dataloader = valid_loader,
+                    early_stopping = config.model.parameters.es_count,
+                    early_reset= config.model.parameters.es_reset,
+                    min_eta = config.model.parameters.min_eta,
+                    from_auroc= config.model.parameters.retrain_from_auroc,
+                    save_path = save_path)
 
-    model, history = train(model,
-                        epochs = config.model.parameters.epochs,
-                        criterion = criterion,
-                        optimizer = optimizer,
-                        scheduler = scheduler,
-                        train_dataloader = train_loader,
-                        val_dataloader = valid_loader,
-                        early_stopping = config.model.parameters.es_count,
-                        early_reset= config.model.parameters.es_reset,
-                        min_eta = config.model.parameters.min_eta,
-                        from_auroc= config.model.parameters.retrain_from_auroc,
-                        save_path = save_path)
+# %% Save history
 
-# %% predictions
+hist_name = 'history.json' if config.model.parameters.retrain_from_auroc is None else 'ft_history.json'
+
+history_path = MODEL_LOGS_PATH / hist_name
+
+if config.misc.save_history:
+
+    with open(history_path, 'w', encoding='utf-8') as file:
+        json.dump(history, file, ensure_ascii=False, indent=4)
+
+
+'''# %% plottings
+plot_loss(history)
+plot_auroc(history)
+plot_lr(history)
+
+%% predictions
 
 torch.cuda.empty_cache()
 gc.collect()
@@ -218,26 +195,8 @@ soft_preds = predict_model(model, test_loader)
 submission = pd.DataFrame({'id': df_test['id']})
 submission['label'] = soft_preds.cpu()
 
-# %% plottings
-
-plot_loss(history)
-plot_auroc(history)
-plot_lr(history)
-
-# %% Save history
-
-hist_name = 'history.json' if config.model.parameters.retrain_from_auroc is None else 'ft_history.json'
-
-history_path = MODEL_LOGS_PATH / hist_name
-
-if config.misc.save_history:
-
-    with open(history_path, 'w', encoding='utf-8') as file:
-        json.dump(history, file, ensure_ascii=False, indent=4)
-
-# %% Submission
+%% Submission
 
 if config.misc.save_submission:
     submission.to_csv(SUBMISSION_PATH / config.misc.submission_name, index=False)
-
-# %%
+'''

@@ -16,12 +16,15 @@ from collections import defaultdict
 import os
 import gc
 
+import yaml
+
 class Dotenv:
     def __init__(self, dictionary):
+        dict_variables = ['kwargs']
         self.__dict__.update(dictionary)
         for key, value in self.__dict__.items():
             if isinstance(value, dict):
-                if key != 'kwargs':
+                if not(key in dict_variables):
                     self.__dict__[key] = Dotenv(value)
 
 class HCD_Dataset_for_training(torch.utils.data.Dataset):
@@ -87,6 +90,17 @@ class HCD_Dataset(torch.utils.data.Dataset):
             image = transform(image)
             
         return {'image': image.to(self.device).float(), 'target': label.to(self.device).float()}
+
+def load_config(config_path):
+
+    with open(config_path, 'r', encoding='utf-8') as file:
+        config = yaml.safe_load(file)
+
+    config = Dotenv(config)
+
+    config.misc.device = torch.device('cuda') if config.misc.device == 'cuda' else torch.device('cpu')
+
+    return config
 
 def set_seed(seed=42):
     np.random.seed(seed)
@@ -174,7 +188,7 @@ def predict_model(model, dataloader):
 
             predictions.append(outputs)
 
-        soft_preds = torch.cat(predictions)
+        soft_preds = torch.cat(predictions).cpu()
 
     
     gc.collect()
@@ -182,7 +196,7 @@ def predict_model(model, dataloader):
     return soft_preds
 
 
-def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader = None, scheduler = None, early_stopping = 10, early_reset = None, min_eta = 1e-3, cv_fold = None, save_path = None, from_auroc = None):
+def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader = None, scheduler = None, early_stopping = 10, early_reset = None, min_eta = 1e-3, cv_fold = None, save_path = None, from_auroc = None, config_path = None):
 
     best_model_wts = deepcopy(model.state_dict())
 
@@ -246,6 +260,16 @@ def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader 
     
     # load best model weights
     model.load_state_dict(best_model_wts)
+
+    # change config to load best model for predictions
+    if config_path:
+        with open(config_path, 'r') as f:
+            config = yaml.safe_load(f)
+        
+        config['model']['architecture']['model_to_load'] = FILE
+
+        with open(config_path, 'w') as f:
+            yaml.dump(config, f)
     
     return model, history
 
