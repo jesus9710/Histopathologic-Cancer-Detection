@@ -24,7 +24,7 @@ import os
 
 ROOT_PATH = Path(__file__).parents[2]
 
-CONFIG_PATH = ROOT_PATH / 'src/Configuration/Config.yml'
+CONFIG_PATH = ROOT_PATH / 'config.yml'
 
 config = load_config(CONFIG_PATH)
 
@@ -171,32 +171,3 @@ if config.misc.save_history:
 
     with open(history_path, 'w', encoding='utf-8') as file:
         json.dump(history, file, ensure_ascii=False, indent=4)
-
-
-'''# %% plottings
-plot_loss(history)
-plot_auroc(history)
-plot_lr(history)
-
-%% predictions
-
-torch.cuda.empty_cache()
-gc.collect()
-
-df_test = [file.name for file in TEST_IMAGES_PATH.iterdir() if file.is_file()]
-df_test = [file.split(sep='.')[0] for file in df_test]
-df_test = pd.DataFrame({'id':df_test,'label':np.ones(len(df_test))*np.nan})
-
-test_dataset = HCD_Dataset(TEST_IMAGES_PATH, df_test, transforms=data_transforms["valid"])
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size = config.data.parameters.test_batch_size)
-
-soft_preds = predict_model(model, test_loader)
-
-submission = pd.DataFrame({'id': df_test['id']})
-submission['label'] = soft_preds.cpu()
-
-%% Submission
-
-if config.misc.save_submission:
-    submission.to_csv(SUBMISSION_PATH / config.misc.submission_name, index=False)
-'''

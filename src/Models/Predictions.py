@@ -16,22 +16,24 @@ import sys
 # %% defaults paths
 
 ROOT_PATH = Path(__file__).parents[2]
-CONFIG_PATH = ROOT_PATH / 'src/Configuration/Config.yml'
+CONFIG_PATH = ROOT_PATH / 'config.yml'
 TEST_IMAGE_PATH = ROOT_PATH / 'Data/test-images'
 PREDICTION_PATH = ROOT_PATH / 'Predictions'
 
 # %% argparse config
 
-# Descomentar para debugging
+# Uncomment for debugging
 # sys.argv = ['Predictions.py']
 
-parser = argparse.ArgumentParser(description="Script para predecir modelos")
+parser = argparse.ArgumentParser(description="Script for predictions")
 
-parser.add_argument('--model-type', type=str, help='Nombre de la clase que implementa la arquitectura del modedlo')
-parser.add_argument('--model-name', type=str, help='Nombre del modelo')
-parser.add_argument('--model-file', type=str, help='Archivo que contiene los pesos del modelo')
-parser.add_argument('--config', type=str, default=str(CONFIG_PATH), help='Ruta al archivo de configuración')
-parser.add_argument('--output', type=str, default=str(PREDICTION_PATH), help='Directorio donde se guardarán las predicciones')
+parser.add_argument('--model-type', type=str, help='Model architecture class name')
+parser.add_argument('--model-name', type=str, help='Model name')
+parser.add_argument('--model-file', type=str, help='File containing models weights')
+parser.add_argument('--input', type=str, default=str(TEST_IMAGE_PATH), help='Test image directory')
+parser.add_argument('--output', type=str, default=str(PREDICTION_PATH), help='Save predictions directory')
+parser.add_argument('--config', type=str, default=str(CONFIG_PATH), help='Config file')
+parser.add_argument('--submission-name', type=str, help='Submission file name')
 
 args = parser.parse_args()
 
@@ -40,7 +42,10 @@ config = load_config(CONFIG_PATH)
 model_type = args.model_type if args.model_type else config.model.predictions.model_class
 model_name = args.model_name if args.model_name else config.model.predictions.model_name
 model_file = args.model_file if args.model_file else config.model.predictions.file
+submission_name = args.submission_name if args.submission_name else config.model.predictions.submission_name
 
+TEST_IMAGE_PATH = Path(args.input)
+PREDICTION_PATH = Path(args.output)
 MODEL_LOGS_PATH = ROOT_PATH / 'Models/' / model_name / model_file
 
 # %% load data
@@ -93,13 +98,7 @@ submission = submission_df[['id','label']]
 
 # %% prediction
 
-# Automate the naming of outputs if an ensemble is to be run
-if config.model.predictions.do_ensemble:
-
-    submission_name = PREDICTION_PATH / (model_name + '.csv')
-
-else:
-    submission_name = PREDICTION_PATH / (config.model.predictions.submission_name)
+submission_name = PREDICTION_PATH / submission_name
 
 submission.to_csv(submission_name, index=False)
 

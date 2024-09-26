@@ -1,0 +1,51 @@
+
+# Configuración de los datasets y dataloaders
+data:
+  parameters:
+    img_size : 224
+    train_batch_size : 100
+    valid_batch_size : 100
+    test_batch_size : 100
+  sampling:
+    n_fold : 15
+    valid_downsample : True
+    downsample_quantity : 2000
+    Random_sampling : True
+    Rnd_sampling_q : 2000
+
+# Configuración del modelo para entrenamiento y predicción
+model:
+  architecture:
+    model_class : HCD_Model_ConvNext
+    model_name : convnext_small.fb_in1k
+    checkpoint_path : 
+    load_model : True
+    model_to_load : 'AUROC0.9615_Loss0.2899.bin'
+    kwargs : {}
+
+  parameters:
+    freeze_params : False
+    epochs : 40
+    cross_val_folds : 5
+    es_count : 10
+    es_reset : 5
+    min_eta : 1.0e-3
+    min_lr : 1.0e-6
+    learning_rate : 1.0e-4
+    weight_decay : 1.0e-5
+    scheduler : CosineAnnealingLR
+    retrain_from_auroc : 0.9616
+    save_checkpoints : True
+
+  predictions:
+    model_class: HCD_Model_EffNet
+    model_name: efficientnet_b0.ra4_e3600_r224_in1k
+    file: ft_AUROC0.9939_Loss0.1018_epoch1.bin
+    tta: True
+    submission_name : 'PRUEBA.csv'
+
+# Miscelánea
+misc:
+  seed : 42
+  save_history : True
+  device : cuda

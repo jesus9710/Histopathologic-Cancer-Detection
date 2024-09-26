@@ -1,0 +1,35 @@
+{   
+    "input_dir": "./Prueba",
+    "predictions_dir": "./Predictions",
+    "output_dir" : "./Prueba2",
+    "do_ensemble": true,
+    "ensemble": [
+      {
+        "model_class": "HCD_Model_ConvNext",
+        "model_name": "convnext_small.fb_in1k",
+        "file": "AUROC0.9953_Loss0.0939_epoch39.bin"
+      },
+      {
+        "model_class": "HCD_Model_ConvNext",
+        "model_name": "convnextv2_tiny.fcmae_ft_in1k",
+        "file": "AUROC0.9950_Loss0.0998_epoch29.bin"
+      },
+      {
+        "model_class": "HCD_Model_EffNet",
+        "model_name": "efficientnet_b0.ra4_e3600_r224_in1k",
+        "file": "ft_AUROC0.9939_Loss0.1018_epoch1.bin"
+      },
+      {
+        "model_class": "HCD_Model_ResNet",
+        "model_name": "seresnet50.ra2_in1k",
+        "file": "AUROC0.9971_Loss0.0900_epoch35.bin"
+      },
+      {
+        "model_class": "HCD_Model_ViT",
+        "model_name": "vit_small_r26_s32_224.augreg_in21k_ft_in1k",
+        "file": "ft_AUROC0.9921_Loss0.1304_epoch17.bin"
+      }
+    ],
+
+    "keep_submissions": false
+  }
