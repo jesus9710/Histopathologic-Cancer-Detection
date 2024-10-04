@@ -6,6 +6,8 @@ data:
     train_batch_size : 100
     valid_batch_size : 100
     test_batch_size : 100
+    num_workers: 10
+    pin_memory: True
   sampling:
     n_fold : 15
     valid_downsample : True
@@ -16,36 +18,36 @@ data:
 # Configuración del modelo para entrenamiento y predicción
 model:
   architecture:
-    model_class : HCD_Model_ConvNext
-    model_name : convnext_small.fb_in1k
-    checkpoint_path : 
+    model_class : HCD_Model_Swin
+    model_name : swin_s3_small_224.ms_in1k
     load_model : True
-    model_to_load : 'AUROC0.9615_Loss0.2899.bin'
+    model_to_load : 'ft_AUROC0.9846_Loss0.1603.bin'
     kwargs : {}
 
   parameters:
     freeze_params : False
-    epochs : 40
-    cross_val_folds : 5
+    epochs : 7
     es_count : 10
-    es_reset : 5
+    es_reset : 3
     min_eta : 1.0e-3
     min_lr : 1.0e-6
-    learning_rate : 1.0e-4
+    learning_rate : 1.0e-6
     weight_decay : 1.0e-5
-    scheduler : CosineAnnealingLR
-    retrain_from_auroc : 0.9616
+    scheduler : None
+    retrain_from_auroc : 0.9846
+    retrain_cv : False
     save_checkpoints : True
+    save_history : False
 
   predictions:
-    model_class: HCD_Model_EffNet
-    model_name: efficientnet_b0.ra4_e3600_r224_in1k
-    file: ft_AUROC0.9939_Loss0.1018_epoch1.bin
+    model_class: HCD_Model_Swin
+    model_name: swin_s3_tiny_224.ms_in1k
+    file: 'AUROC0.9880_Loss0.1851_epoch12.bin'
+    cv_folds: 5
     tta: True
-    submission_name : 'PRUEBA.csv'
+    submission_name : '4xTTA_ConvNextS_EffNet_SeResNet50_ViTS_SwinT.csv'
 
 # Miscelánea
 misc:
   seed : 42
-  save_history : True
   device : cuda

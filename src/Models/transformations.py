@@ -8,7 +8,6 @@ def get_transforms(image_size):
             A.VerticalFlip(p=0.5),
             A.RandomRotate90(p=0.5),
             A.HorizontalFlip(p=0.5),
-            A.Rotate(limit=(-180,180), p=0.5),
             A.HueSaturationValue(
                     hue_shift_limit=0.1, 
                     sat_shift_limit=0.1, 

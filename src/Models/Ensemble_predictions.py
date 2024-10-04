@@ -1,9 +1,6 @@
 #%% libs
-import numpy as np
 import pandas as pd
 from pathlib import Path
-import seaborn as sns
-import matplotlib.pyplot as plt
 
 from utils import *
 
@@ -29,6 +26,7 @@ parser = argparse.ArgumentParser(description="Script for ensembling")
 parser.add_argument('--input', type=str, default=str(PREDICTION_PATH), help='Predictions directory')
 parser.add_argument('--output', type=str, default=str(ENSEMBLE_SUBMISSION_PATH), help='Output ensemble directory')
 parser.add_argument('--config', type=str, default=str(CONFIG_PATH), help='Config file')
+parser.add_argument('--submission-name', type=str, help="Submission file name")
 
 args = parser.parse_args()
 
@@ -37,6 +35,8 @@ ENSEMBLE_SUBMISSION_PATH = Path(args.output)
 CONFIG_PATH =  Path(args.config)
 
 config = load_config(CONFIG_PATH)
+
+submission_name = args.submission_name if args.submission_name else config.model.predictions.submission_name
 
 # %% submissions to ensemble
 
@@ -51,12 +51,6 @@ for submission, acr in zip(submission_list, submission_acr):
     df = pd.read_csv(submission, header=0, names=['id',acr+'_label'])
     df_test = df_test.merge(df, on='id',how='inner')
 
-# %% Correlation
-
-fig, ax = plt.subplots(figsize=(10,10))
-
-sns.heatmap(df_test.drop('id', axis=1).corr(), cmap='plasma', annot=True, ax=ax)
-
 # %% Ensemble
 
 df_test['label'] = df_test.drop('id', axis=1).mean(axis=1)
@@ -64,6 +58,6 @@ df_test = df_test[['id','label']]
 
 # %% submission
 
-df_test.to_csv(ENSEMBLE_SUBMISSION_PATH / config.model.predictions.submission_name, index=False)
+df_test.to_csv(ENSEMBLE_SUBMISSION_PATH / submission_name, index=False)
 
 # %%

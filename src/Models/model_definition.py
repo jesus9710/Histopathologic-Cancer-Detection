@@ -1,5 +1,5 @@
 
-import numpy as np
+from segmentation_models_pytorch import Unet, FPN
 import torch
 import timm
 
@@ -190,11 +190,144 @@ class HCD_Model_ViT(torch.nn.Module):
         output = self.sigmoid(self.linear(features))
         return output
 
+class HCD_Model_EffNetViT(torch.nn.Module):
+
+    def __init__(self, model_name, num_classes=1, pretrained=True, checkpoint_path=None, freeze_params = True, device = torch.device('cuda')):
+        super(HCD_Model_EffNetViT, self).__init__()
+        model = timm.create_model(model_name=model_name, pretrained=pretrained, checkpoint_path=checkpoint_path)
+        self.model = model.to(device)
+
+        in_features = self.model.head.classifier[-1].in_features
+        self.model.head.classifier[-1] = torch.nn.Linear(in_features, num_classes)
+        self.model.head.classifier += torch.nn.Sequential(torch.nn.Sigmoid())
+
+        if freeze_params:
+            for param in self.model.parameters():
+                param.requires_grad = False
+            for param in self.model.head.parameters():
+                param.requires_grad = True
+        else:
+            for param in self.model.parameters():
+                param.requires_grad = True
+
+    def forward(self, images):
+        output = self.model(images)
+
+        return output
+    
+class HCD_Model_Inception(torch.nn.Module):
+
+    def __init__(self, model_name, num_classes=1, pretrained=True, checkpoint_path=None, freeze_params = True, device = torch.device('cuda')):
+        super(HCD_Model_Inception, self).__init__()
+        model = timm.create_model(model_name=model_name, pretrained=pretrained, checkpoint_path=checkpoint_path)
+        self.model = model.to(device)
+
+        in_features = self.model.last_linear.in_features
+
+        self.model.last_linear = torch.nn.Identity()
+        self.model.global_pool = torch.nn.Identity()
+
+        if freeze_params:
+            for param in self.model.parameters():
+                param.requires_grad = False
+
+        self.pooling = GeM()
+        self.linear = torch.nn.Linear(in_features, num_classes)
+        self.sigmoid = torch.nn.Sigmoid()
+
+    def forward(self, images):
+        features = self.model(images)
+        pooled_features = self.pooling(features).flatten(1)
+        output = self.sigmoid(self.linear(pooled_features))
+
+        return output
+
+class HCD_Model_Xception(torch.nn.Module):
+
+    def __init__(self, model_name, num_classes=1, pretrained=True, checkpoint_path=None, freeze_params = True, device = torch.device('cuda')):
+        super(HCD_Model_Xception, self).__init__()
+        model = timm.create_model(model_name=model_name, pretrained=pretrained, checkpoint_path=checkpoint_path)
+        self.model = model.to(device)
+
+        in_features = model.head.fc.in_features
+
+        self.model.head = torch.nn.Identity()
+
+        if freeze_params:
+            for param in self.model.parameters():
+                param.requires_grad = False
+
+        self.pooling = GeM()
+        self.linear = torch.nn.Linear(in_features, num_classes)
+        self.sigmoid = torch.nn.Sigmoid()
+
+    def forward(self, images):
+        features = self.model(images)
+        pooled_features = self.pooling(features).flatten(1)
+        output = self.sigmoid(self.linear(pooled_features))
+
+        return output
+
+class HCD_Model_Unet(torch.nn.Module):
+
+    def __init__(self, model_name, num_classes=1, pretrained=True, checkpoint_path=None, freeze_params = True,device = torch.device('cuda')):
+        super(HCD_Model_Unet, self).__init__()
+        
+        pretrained = 'imagenet' if pretrained == True else None
+
+        model = Unet(encoder_name=model_name, encoder_weights = pretrained, classes=num_classes)
+        self.model = model.to(device)
+
+        if freeze_params:
+            for param in self.model.parameters():
+                param.requires_grad = False
+
+        self.pooling = GeM()
+        self.linear = torch.nn.Linear(num_classes, num_classes)
+        self.sigmoid = torch.nn.Sigmoid()
+
+    def forward(self, images):
+        features = self.model(images)
+        pooled_features = self.pooling(features).flatten(1)
+        output = self.sigmoid(self.linear(pooled_features))
+
+        return output
+
+class HCD_Model_FPN(torch.nn.Module):
+
+    def __init__(self, model_name, num_classes=1, pretrained=True, checkpoint_path=None, freeze_params = True,device = torch.device('cuda')):
+        super(HCD_Model_FPN, self).__init__()
+        
+        pretrained = 'imagenet' if pretrained == True else None
+
+        model = FPN(encoder_name=model_name, encoder_weights = pretrained, classes=num_classes)
+        self.model = model.to(device)
+
+        if freeze_params:
+            for param in self.model.parameters():
+                param.requires_grad = False
+
+        self.pooling = GeM()
+        self.linear = torch.nn.Linear(num_classes, num_classes)
+        self.sigmoid = torch.nn.Sigmoid()
+
+    def forward(self, images):
+        features = self.model(images)
+        pooled_features = self.pooling(features).flatten(1)
+        output = self.sigmoid(self.linear(pooled_features))
+
+        return output
+
 # Diccionario para mapear configuración y clases
 maping_model = {"HCD_Model_ResNet" : HCD_Model_ResNet,
                "HCD_Model_EVA02"  : HCD_Model_EVA02,
                "HCD_Model_EffNet" : HCD_Model_EffNet,
                "HCD_Simple_Model" : HCD_Simple_Model,
-               "HCD_Model_ConvNext": HCD_Model_ConvNext,
-               "HCD_Model_Swin": HCD_Model_Swin,
-               "HCD_Model_ViT": HCD_Model_ViT}
+               "HCD_Model_ConvNext" : HCD_Model_ConvNext,
+               "HCD_Model_Swin" : HCD_Model_Swin,
+               "HCD_Model_ViT" : HCD_Model_ViT,
+               "HCD_Model_EffNetViT" : HCD_Model_EffNetViT,
+               "HCD_Model_Inception" : HCD_Model_Inception,
+               "HCD_Model_Unet" : HCD_Model_Unet,
+               "HCD_Model_FPN" : HCD_Model_FPN,
+               "HCD_Model_Xception" : HCD_Model_Xception}

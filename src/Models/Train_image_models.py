@@ -57,117 +57,120 @@ df.kfold = df.kfold.astype('int')
 
 data_transforms = get_transforms(config.data.parameters.img_size)
 
-# %% Modelling
+# %% Training
 
-if not config.model.architecture.load_model:
-    model = maping_model[config.model.architecture.model_class](config.model.architecture.model_name,
-                                                               checkpoint_path = config.model.architecture.checkpoint_path,
-                                                               freeze_params = config.model.parameters.freeze_params,
-                                                               device = config.misc.device,
-                                                               **config.model.architecture.kwargs)
-    model.to(config.misc.device)
+if __name__ == '__main__':
 
-# %% Load model
+    # Modelling
 
-checkpoint_path = MODEL_LOGS_PATH / config.model.architecture.model_to_load
-
-if config.model.architecture.load_model:
-
-    model = maping_model[config.model.architecture.model_class](config.model.architecture.model_name,
-                                                                pretrained = False,
-                                                                checkpoint_path = None,
+    if not config.model.architecture.load_model:
+        model = maping_model[config.model.architecture.model_class](config.model.architecture.model_name,
                                                                 freeze_params = config.model.parameters.freeze_params,
                                                                 device = config.misc.device,
                                                                 **config.model.architecture.kwargs)
-    model.to(config.misc.device)
+        model.to(config.misc.device)
 
-    state_dict = torch.load(checkpoint_path)
+    # Load model
 
-    model.load_state_dict(state_dict)
+    checkpoint_path = MODEL_LOGS_PATH / config.model.architecture.model_to_load
 
-# %% optimizer and criterion
+    if config.model.architecture.load_model:
 
-criterion = torch.nn.BCELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=config.model.parameters.learning_rate, 
-                       weight_decay=config.model.parameters.weight_decay)
+        model = maping_model[config.model.architecture.model_class](config.model.architecture.model_name,
+                                                                    pretrained = False,
+                                                                    freeze_params = config.model.parameters.freeze_params,
+                                                                    device = config.misc.device,
+                                                                    **config.model.architecture.kwargs)
+        model.to(config.misc.device)
 
-# %% Dataloaders
+        state_dict = torch.load(checkpoint_path)
 
-df_train = df[df.kfold != fold].reset_index(drop=True)
-df_valid = df[df.kfold == fold].reset_index(drop=True)
+        model.load_state_dict(state_dict)
 
-if config.data.sampling.valid_downsample:
+    # optimizer and criterion
 
-    half_len_dataset = int(np.floor(config.data.sampling.downsample_quantity / 2))
+    criterion = torch.nn.BCELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=config.model.parameters.learning_rate, 
+                        weight_decay=config.model.parameters.weight_decay)
 
-    df_positive = df_valid[df_valid['label'] == 1].sample(half_len_dataset, random_state=config.misc.seed)
-    df_negative = df_valid[df_valid['label'] == 0].sample(half_len_dataset, random_state=config.misc.seed)
+    # Dataloaders
 
-    df_valid = pd.concat([df_positive, df_negative], axis=0).reset_index(drop=True)
+    df_train = df[df.kfold != fold].reset_index(drop=True)
+    df_valid = df[df.kfold == fold].reset_index(drop=True)
 
-if config.data.sampling.Random_sampling:
-    train_dataset = HCD_Dataset_for_training(TRAIN_IMAGES_PATH, df_train, data_size=config.data.sampling.Rnd_sampling_q, transforms=data_transforms["train"])
+    if config.data.sampling.valid_downsample:
 
-else:
-    train_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_train, transforms=data_transforms["train"])
+        half_len_dataset = int(np.floor(config.data.sampling.downsample_quantity / 2))
 
-valid_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_valid, transforms=data_transforms["valid"])
+        df_positive = df_valid[df_valid['label'] == 1].sample(half_len_dataset, random_state=config.misc.seed)
+        df_negative = df_valid[df_valid['label'] == 0].sample(half_len_dataset, random_state=config.misc.seed)
 
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.data.parameters.train_batch_size, 
-                            num_workers=0, shuffle=True, pin_memory=False, drop_last=False)
-valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=config.data.parameters.valid_batch_size, 
-                            num_workers=0, shuffle=False, pin_memory=False)
-
-# %% lr scheduler
-
-if config.model.parameters.scheduler == 'CosineAnnealingLR':
+        df_valid = pd.concat([df_positive, df_negative], axis=0).reset_index(drop=True)
 
     if config.data.sampling.Random_sampling:
+        train_dataset = HCD_Dataset_for_training(TRAIN_IMAGES_PATH, df_train, data_size=config.data.sampling.Rnd_sampling_q, transforms=data_transforms["train"])
 
-        T_max = config.data.sampling.Rnd_sampling_q * config.model.parameters.epochs // config.data.parameters.train_batch_size
+    else:
+        train_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_train, transforms=data_transforms["train"])
+
+    valid_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_valid, transforms=data_transforms["valid"])
+
+    train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.data.parameters.train_batch_size, 
+                                num_workers=config.data.parameters.num_workers, pin_memory=config.data.parameters.pin_memory, shuffle=True, drop_last=False)
+    valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=config.data.parameters.valid_batch_size, 
+                                num_workers=config.data.parameters.num_workers, pin_memory=config.data.parameters.pin_memory, shuffle=False, drop_last=False)
+
+    # lr scheduler
+
+    if config.model.parameters.scheduler == 'CosineAnnealing':
+
+        if config.data.sampling.Random_sampling:
+
+            T_max = config.data.sampling.Rnd_sampling_q * config.model.parameters.epochs // config.data.parameters.train_batch_size
+            
+        else:
+
+            T_max = df.shape[0] * (config.data.sampling.n_fold-1) * config.model.parameters.epochs // config.data.parameters.train_batch_size // config.data.sampling.n_fold
         
+        scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=T_max, eta_min=config.model.parameters.min_lr)
+
+    elif config.model.parameters.scheduler == 'OneCycle':
+
+        scheduler = lr_scheduler.OneCycleLR(optimizer, max_lr=config.model.parameters.learning_rate, epochs=config.model.parameters.epochs, steps_per_epoch=int(np.floor(len(train_dataset)/config.data.parameters.train_batch_size)))
+
     else:
 
-        T_max = df.shape[0] * (config.data.sampling.n_fold-1) * config.model.parameters.epochs // config.data.parameters.train_batch_size // config.data.sampling.n_fold
-    
-    scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=T_max, eta_min=config.model.parameters.min_lr)
+        scheduler = None
 
-elif config.model.parameters.scheduler == 'OneCycle':
+    # Training
 
-    scheduler = lr_scheduler.OneCycleLR(optimizer, max_lr=config.model.parameters.learning_rate, epochs=config.model.parameters.epochs, steps_per_epoch=int(np.floor(len(train_dataset)/config.data.parameters.train_batch_size)))
+    if config.model.parameters.save_checkpoints:
+        os.makedirs(MODEL_LOGS_PATH, exist_ok=True)
+        save_path = MODEL_LOGS_PATH
+    else:
+        save_path = None
 
-else:
+    model, history = train(model,
+                        epochs = config.model.parameters.epochs,
+                        criterion = criterion,
+                        optimizer = optimizer,
+                        scheduler = scheduler,
+                        train_dataloader = train_loader,
+                        val_dataloader = valid_loader,
+                        early_stopping = config.model.parameters.es_count,
+                        early_reset= config.model.parameters.es_reset,
+                        min_eta = config.model.parameters.min_eta,
+                        from_auroc= config.model.parameters.retrain_from_auroc,
+                        save_path = save_path,
+                        device=config.misc.device)
 
-    scheduler = None
+    # Save history
 
-# %% Training
+    hist_name = 'history.json' if config.model.parameters.retrain_from_auroc is None else 'ft_history.json'
 
-if config.model.parameters.save_checkpoints:
-    os.makedirs(MODEL_LOGS_PATH, exist_ok=True)
-    save_path = MODEL_LOGS_PATH
-else:
-    save_path = None
+    history_path = MODEL_LOGS_PATH / hist_name
 
-model, history = train(model,
-                    epochs = config.model.parameters.epochs,
-                    criterion = criterion,
-                    optimizer = optimizer,
-                    scheduler = scheduler,
-                    train_dataloader = train_loader,
-                    val_dataloader = valid_loader,
-                    early_stopping = config.model.parameters.es_count,
-                    early_reset= config.model.parameters.es_reset,
-                    min_eta = config.model.parameters.min_eta,
-                    from_auroc= config.model.parameters.retrain_from_auroc,
-                    save_path = save_path)
+    if config.model.parameters.save_history:
 
-# %% Save history
-
-hist_name = 'history.json' if config.model.parameters.retrain_from_auroc is None else 'ft_history.json'
-
-history_path = MODEL_LOGS_PATH / hist_name
-
-if config.misc.save_history:
-
-    with open(history_path, 'w', encoding='utf-8') as file:
-        json.dump(history, file, ensure_ascii=False, indent=4)
+        with open(history_path, 'w', encoding='utf-8') as file:
+            json.dump(history, file, ensure_ascii=False, indent=4)

@@ -23,12 +23,21 @@ Due to the large size of the dataset, training different model architectures was
 Pre-trained models were trained using transfer learning to adapt them for the cancer detection task. Initially, the backbone weights of the models were frozen, and only the final classification layers were trained. For this phase, an aggressive learning rate and a one-cycle learning rate scheduler were employed.
 
 ### Fine-tuning
-To further improve performance, the entire model (including the pre-trained backbone) was later re-trained using a lower learning rate, combined with a Cosine Annealing scheduler. To enchance the optimization process, the best model weights were loaded when no improvements were observed over several epochs
+To further improve performance, the entire model (including the pre-trained backbone) was later re-trained using a lower learning rate, combined with a Cosine Annealing scheduler. To enchance the optimization process, the best model weights were loaded when no improvements were observed over several epochs.
 
-A cross-validation ensemble approach was considered to increase robustness, but it was not pursued due to the extended training times required for each model.
+### Cross-validation ensemble
+
+A cross-validation ensemble approach was tested on SeResNet50 to increase robustness. The whole dataset was splitted into 6 different folds, and 5 models were trained using fold i for training and fold i+1 for validation (for i in nfolds). Due to the extended times required for each model to train, only a few samples of each folds were used (by random-samplig train data and downsampling validation data). This experiment yielded an auroc metric around 0.9 for each model, resulting in a poor ensemble predictor. Increasing the sample size of each folds may produce better results, but was discarded due to the high training time required.
 
 ## Predictions
 
 To enhance prediction robustness, a Test-Time Augmentation (TTA) strategy with 4 variations was applied. The augmentations were based on geometric transformations similar to those used during data augmentation. This technique improved both private and public leaderboard scores. An 8-variation TTA was also tested but did not show any significant improvement over the 4-variation approach.
 
 Once TTA predictions were generated for each of the five models, they were ensembled to produce the final predictions.
+
+## Configuration Files
+
+Two configurations file where used: `config.yml` for training and predictions scripts and `ensemble_config.json` for automation powershell script `predict_and_ensemble.ps1`. The options available in `ensemble_config.json` override the prediction variables set in `config.yml`. For more information, see documentation:
+
+- [config.yml documentation](./Docs/configuration.md)
+- [ensemble_config.json documentation](./Docs/ensemble_configuration.md)

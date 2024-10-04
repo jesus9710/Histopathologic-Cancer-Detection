@@ -29,7 +29,7 @@ class Dotenv:
 
 class HCD_Dataset_for_training(torch.utils.data.Dataset):
 
-    def __init__(self, data_path, df, data_size, transforms = None, device = torch.device('cuda')):
+    def __init__(self, data_path, df, data_size, transforms = None):
 
         super(HCD_Dataset_for_training, self).__init__()
 
@@ -37,7 +37,6 @@ class HCD_Dataset_for_training(torch.utils.data.Dataset):
         self.positive_df = df[df['label'] == 1]
         self.negative_df = df[df['label'] == 0]
         self.size = int(np.floor(data_size / 2))
-        self.device = device
         self.transforms = transforms
     
     def __len__(self):
@@ -60,18 +59,17 @@ class HCD_Dataset_for_training(torch.utils.data.Dataset):
             transform = transforms_v2.ToTensor()
             image = transform(image)
 
-        return {'image': image.to(self.device).float(), 'target': label.to(self.device).float()}
+        return {'image': image.float(), 'target': label.float()}
 
 class HCD_Dataset(torch.utils.data.Dataset):
 
-    def __init__(self, data_path, df, transforms = None, device = torch.device('cuda')):
+    def __init__(self, data_path, df, transforms = None):
 
         super(HCD_Dataset, self).__init__()
 
         self.data_path = data_path
         self.labels = df['label']
         self.image_id = df['id']
-        self.device = device
         self.transforms = transforms
     
     def __len__(self):
@@ -89,7 +87,7 @@ class HCD_Dataset(torch.utils.data.Dataset):
             transform = transforms_v2.ToTensor()
             image = transform(image)
             
-        return {'image': image.to(self.device).float(), 'target': label.to(self.device).float()}
+        return {'image': image.float(), 'target': label.float()}
 
 def load_config(config_path):
 
@@ -112,7 +110,7 @@ def set_seed(seed=42):
     # Set a fixed value for the hash seed
     os.environ['PYTHONHASHSEED'] = str(seed)
 
-def train_one_epoch(model, criterion, optimizer, scheduler, dataloader):
+def train_one_epoch(model, criterion, optimizer, scheduler, dataloader, device = torch.device('cuda')):
     model.train()
 
     loss_hist = []
@@ -121,8 +119,8 @@ def train_one_epoch(model, criterion, optimizer, scheduler, dataloader):
 
     for data in dataloader:
 
-        images = data['image']
-        targets = data['target']
+        images = data['image'].to(device)
+        targets = data['target'].to(device)
 
         optimizer.zero_grad()
         
@@ -149,7 +147,7 @@ def train_one_epoch(model, criterion, optimizer, scheduler, dataloader):
     
     return loss, auroc
 
-def eval_one_epoch(model, criterion, dataloader):
+def eval_one_epoch(model, criterion, dataloader, device=torch.device('cuda')):
 
     model.eval()
     loss_hist = []
@@ -158,12 +156,16 @@ def eval_one_epoch(model, criterion, dataloader):
 
     with torch.no_grad():
         for data in dataloader:
-            output = model(data['image']).squeeze()
-            loss = criterion(output, data['target'])
+
+            images = data['image'].to(device)
+            targets = data['target'].to(device)
+
+            output = model(images).squeeze()
+            loss = criterion(output, targets)
             loss_hist.append(loss.item())
 
             out_hist.append(output)
-            label_hist.append(data['target'])
+            label_hist.append(targets)
         
         out_hist = torch.cat(out_hist)
         label_hist = torch.cat(label_hist)
@@ -175,7 +177,7 @@ def eval_one_epoch(model, criterion, dataloader):
     
     return loss, auroc
 
-def predict_model(model, dataloader):
+def predict_model(model, dataloader, device=torch.device('cuda')):
 
     model.eval()
 
@@ -184,19 +186,18 @@ def predict_model(model, dataloader):
     with torch.no_grad():
         for data in dataloader:
 
-            outputs = model(data['image']).squeeze()
-
+            images = data['image'].to(device)
+            outputs = model(images).squeeze()
             predictions.append(outputs)
 
         soft_preds = torch.cat(predictions).cpu()
-
     
     gc.collect()
 
     return soft_preds
 
 
-def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader = None, scheduler = None, early_stopping = 10, early_reset = None, min_eta = 1e-3, cv_fold = None, save_path = None, from_auroc = None, config_path = None):
+def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader = None, scheduler = None, early_stopping = 10, early_reset = None, min_eta = 1e-3, cv_fold = None, save_path = None, from_auroc = None, config_path = None, device= torch.device('cuda')):
 
     best_model_wts = deepcopy(model.state_dict())
 
@@ -223,8 +224,8 @@ def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader 
 
     for epoch in range(1, epochs + 1):
         
-        train_loss, train_auroc = train_one_epoch(model=model, criterion=criterion, optimizer=optimizer, scheduler=scheduler, dataloader=train_dataloader)
-        val_loss, val_auroc = eval_one_epoch(model=model, criterion=criterion, dataloader=val_dataloader)
+        train_loss, train_auroc = train_one_epoch(model=model, criterion=criterion, optimizer=optimizer, scheduler=scheduler, dataloader=train_dataloader, device=device)
+        val_loss, val_auroc = eval_one_epoch(model=model, criterion=criterion, dataloader=val_dataloader, device=device)
 
         history['epoch'].append(epoch)
         history['Train Loss'].append(train_loss)
@@ -272,6 +273,14 @@ def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader 
             yaml.dump(config, f)
     
     return model, history
+
+def get_best_auroc_scored_model(model_list):
+
+    AUROCS =[float(file.split(sep='AUROC')[-1].split(sep='_')[0]) for file in model_list]
+
+    best_model = model_list[np.argmax(AUROCS)]
+
+    return best_model, max(AUROCS)
 
 def plot_loss(hist):
 

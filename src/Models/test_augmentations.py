@@ -22,7 +22,7 @@ from model_definition import *
 
 ROOT_PATH = Path(__file__).parents[2]
 
-CONFIG_PATH = ROOT_PATH / 'src/Configuration/Config.yml'
+CONFIG_PATH = ROOT_PATH / 'config.yml'
 
 with open(CONFIG_PATH, 'r', encoding='utf-8') as file:
     config = yaml.safe_load(file)
