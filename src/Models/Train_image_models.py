@@ -6,7 +6,6 @@ import pandas as pd
 import torch
 import torch.utils
 import torch.utils.data
-from torch.optim import lr_scheduler
 import torch.utils.data.dataloader
 
 from sklearn.model_selection import StratifiedGroupKFold
@@ -122,26 +121,13 @@ if __name__ == '__main__':
 
     # lr scheduler
 
-    if config.model.parameters.scheduler == 'CosineAnnealing':
+    scheduler = get_scheduler(train_dataset, optimizer, config)
 
-        if config.data.sampling.Random_sampling:
-
-            T_max = config.data.sampling.Rnd_sampling_q * config.model.parameters.epochs // config.data.parameters.train_batch_size
-            
-        else:
-
-            T_max = df.shape[0] * (config.data.sampling.n_fold-1) * config.model.parameters.epochs // config.data.parameters.train_batch_size // config.data.sampling.n_fold
-        
-        scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=T_max, eta_min=config.model.parameters.min_lr)
-
-    elif config.model.parameters.scheduler == 'OneCycle':
-
-        scheduler = lr_scheduler.OneCycleLR(optimizer, max_lr=config.model.parameters.learning_rate, epochs=config.model.parameters.epochs, steps_per_epoch=int(np.floor(len(train_dataset)/config.data.parameters.train_batch_size)))
-
+    if config.model.parameters.SWA_enable:
+        swa_strat = swa(model, optimizer, scheduler, config.model.parameters.SWA_lr, config.model.parameters.SWA_start)
     else:
-
-        scheduler = None
-
+        swa_strat = None
+        
     # Training
 
     if config.model.parameters.save_checkpoints:
@@ -157,6 +143,7 @@ if __name__ == '__main__':
                         scheduler = scheduler,
                         train_dataloader = train_loader,
                         val_dataloader = valid_loader,
+                        swa=swa_strat,
                         early_stopping = config.model.parameters.es_count,
                         early_reset= config.model.parameters.es_reset,
                         min_eta = config.model.parameters.min_eta,

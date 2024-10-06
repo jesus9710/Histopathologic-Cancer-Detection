@@ -71,6 +71,8 @@ if __name__ == '__main__':
 
     model = maping_model[model_type](model_name=model_name, pretrained=False, device = config.misc.device)
 
+    model = torch.optim.swa_utils.AveragedModel(model) if config.model.predictions.swa else model
+
     save_state = torch.load(MODEL_LOGS_PATH)
 
     model.load_state_dict(save_state)
