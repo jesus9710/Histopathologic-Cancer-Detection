@@ -124,7 +124,7 @@ if __name__ == '__main__':
     scheduler = get_scheduler(train_dataset, optimizer, config)
 
     if config.model.parameters.SWA_enable:
-        swa_strat = swa(model, optimizer, scheduler, config.model.parameters.SWA_lr, config.model.parameters.SWA_start)
+        swa_strat = SWA(model, optimizer, scheduler, config.model.parameters.SWA_lr, config.model.parameters.SWA_start)
     else:
         swa_strat = None
         
@@ -136,7 +136,7 @@ if __name__ == '__main__':
     else:
         save_path = None
 
-    model, history = train(model,
+    model, history = train(model = model,
                         epochs = config.model.parameters.epochs,
                         criterion = criterion,
                         optimizer = optimizer,
@@ -153,7 +153,7 @@ if __name__ == '__main__':
 
     # Save history
 
-    hist_name = 'history.json' if config.model.parameters.retrain_from_auroc is None else 'ft_history.json'
+    hist_name = config.model.parameters.history_name if config.model.parameters.retrain_from_auroc is None else f"ft_{config.model.parameters.history_name}"
 
     history_path = MODEL_LOGS_PATH / hist_name
 

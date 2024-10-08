@@ -6,9 +6,6 @@ import torch.utils.data
 from torchvision.transforms import v2 as transforms_v2
 from torcheval.metrics.functional import binary_auroc
 
-import matplotlib.pyplot as plt
-import seaborn as sns
-
 from PIL import Image
 from copy import deepcopy
 from collections import defaultdict
@@ -89,7 +86,7 @@ class HCD_Dataset(torch.utils.data.Dataset):
             
         return {'image': image.float(), 'target': label.float()}
 
-class swa:
+class SWA:
     
     def __init__(self, model, optimizer, scheduler, learning_rate, start):
 
@@ -101,9 +98,11 @@ class swa:
     def step(self, model, epoch):
         if epoch == self.start:
             self.model = torch.optim.swa_utils.AveragedModel(model=model)
+
         elif epoch > self.start:
           self.model.update_parameters(model)
           self.swa_scheduler.step()
+
         else:
           self.scheduler.step()
 
@@ -112,6 +111,7 @@ class swa:
         if epoch > self.start:
             update_bn(train_loader, self.model, device)
             val_loss, val_auroc = eval_one_epoch(self.model, criterion, valid_loader, device)
+
         else:
             val_loss, val_auroc = eval_one_epoch(model, criterion, valid_loader)
         
@@ -137,6 +137,7 @@ def load_config(config_path):
     return config
 
 def set_seed(seed=42):
+
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed(seed)
@@ -147,15 +148,12 @@ def set_seed(seed=42):
 def get_Tmax(dataset, config):
 
     if config.data.sampling.Random_sampling:
-
         T_max = config.data.sampling.Rnd_sampling_q * config.model.parameters.epochs // config.data.parameters.train_batch_size
         
     elif config.model.parameters.SWA_enable:
-
         T_max = config.model.parameters.SWA_start
 
     else:
-
         T_max = len(dataset) * (config.data.sampling.n_fold-1) * config.model.parameters.epochs // config.data.parameters.train_batch_size // config.data.sampling.n_fold
     
     return T_max
@@ -163,7 +161,6 @@ def get_Tmax(dataset, config):
 def get_scheduler(dataset, optimizer, config):
 
     if config.model.parameters.scheduler == 'CosineAnnealing':
-
         T_max = get_Tmax(dataset, config)
         
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, T_max=T_max, eta_min=config.model.parameters.min_lr)
@@ -171,24 +168,21 @@ def get_scheduler(dataset, optimizer, config):
     elif config.model.parameters.scheduler == 'OneCycle':
 
         if config.model.parameters.SWA_enable:
-
             steps_per_epoch = 1
             epochs = config.model.parameters.SWA_start
 
         else:
-
             epochs=config.model.parameters.epochs
             steps_per_epoch=int(np.floor(len(dataset)/config.data.parameters.train_batch_size))
 
         scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=config.model.parameters.learning_rate, epochs=epochs, steps_per_epoch=steps_per_epoch)
 
     else:
-
         scheduler = None
     
     return scheduler
 
-def train_one_epoch(model, criterion, optimizer, scheduler, dataloader, swa = None, device = torch.device('cuda')):
+def train_one_epoch(model, criterion, optimizer, dataloader, scheduler = None, device = torch.device('cuda')):
 
     model.train()
 
@@ -208,7 +202,7 @@ def train_one_epoch(model, criterion, optimizer, scheduler, dataloader, swa = No
         loss.backward()
         optimizer.step()
 
-        if (scheduler is not None) and (not swa):
+        if scheduler:
             scheduler.step()
 
         loss_hist.append(loss.item())
@@ -295,7 +289,121 @@ def save_model_if_better_auroc(model, epoch, best_epoch_auroc, best_model_wts, v
 
     return best_model_wts, best_epoch_auroc, flag
 
-def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader = None, scheduler = None, swa = None, early_stopping = 10, early_reset = None, min_eta = 1e-3, cv_fold = None, save_path = None, from_auroc = None, config_path = None, device= torch.device('cuda')):
+def update_history(history, optimizer, epoch, train_loss = None, val_loss = None, train_auroc = None, val_auroc = None, scheduler = None):
+
+    current_lr = scheduler.get_lr()[0] if scheduler else optimizer.param_groups[0]['lr']
+
+    history['epoch'].append(epoch)
+    history['Train Loss'].append(train_loss)
+    history['Valid Loss'].append(val_loss)
+    history['Train AUROC'].append(train_auroc)
+    history['Valid AUROC'].append(val_auroc)
+    history['lr'].append(current_lr)
+
+    return history
+
+def standard_train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader = None, scheduler = None, early_stopping = 10, early_reset = None, min_eta = 1e-3, cv_fold = None, save_path = None, from_auroc = None, device= torch.device('cuda'), **kwargs):
+
+    best_model_wts = deepcopy(model.state_dict())
+
+    pre_name = '' if from_auroc is None else 'ft_'
+    post_name = '' if cv_fold is None else f'_Fold{cv_fold}'
+    max_count = np.inf if early_stopping is None else early_stopping
+    reset_count = np.inf if early_reset is None else early_reset
+    best_epoch_auroc = -np.inf if from_auroc is None else from_auroc
+
+    history = defaultdict(list)
+    max_count = early_stopping
+    count = 0
+
+    for epoch in range(1, epochs + 1):
+
+        # Train and validate one epoch
+        train_loss, train_auroc = train_one_epoch(model=model, criterion=criterion, optimizer=optimizer, scheduler=scheduler, dataloader=train_dataloader, device=device)
+        val_loss, val_auroc = eval_one_epoch(model=model, criterion=criterion, dataloader=val_dataloader, device=device)
+
+        # Update history
+        history = update_history(history, optimizer, epoch, train_loss, val_loss, train_auroc, val_auroc, scheduler)
+
+        # Save model if validation metric is improved
+        best_model_wts, best_epoch_auroc, improved = save_model_if_better_auroc(model, epoch, best_epoch_auroc, best_model_wts, val_loss, val_auroc, save_path, min_eta, pre_name, post_name)
+
+        count = count + 1 if not improved else 0
+
+        # Load best model weights if no improvement during "reset_count" epochs
+        if (count % reset_count == 0 and count > 0):
+            model.load_state_dict(best_model_wts)
+            print('Best Weights loaded')
+
+        # Early stopping
+        if count >= max_count:
+            print('Early Stopping. Num of epochs: {:.4f}'.format(epoch))
+            break
+
+    # Load best model weights
+    model.load_state_dict(best_model_wts)
+    print("Best AUROC: {:.4f}".format(best_epoch_auroc))
+
+    return model, history
+
+def swa_train(model, epochs, criterion, optimizer, swa, train_dataloader, val_dataloader = None, scheduler = None, early_reset = None, min_eta = 1e-3, save_path = None, from_auroc = None, device= torch.device('cuda'), **kwargs):
+
+    best_model_wts = deepcopy(model.state_dict())
+    best_epoch_auroc = -np.inf if from_auroc is None else from_auroc
+    history = defaultdict(list)
+
+    reset_count = np.inf if early_reset is None else early_reset
+    count = 0
+
+    for epoch in range(1, epochs + 1):
+        
+        # Train one epoch
+        train_loss, train_auroc = train_one_epoch(model=model, criterion=criterion, optimizer=optimizer, dataloader=train_dataloader, device=device)
+
+        # Validation and SWA parameters update
+        swa.step(model, epoch)
+        # val_loss, val_auroc = swa.validate(model=model, criterion=criterion, train_loader = train_dataloader, valid_loader =val_dataloader, epoch=epoch, device=device)
+        model_to_save, swa_flag = swa.get_current_model(model, epoch)
+        pre_name = 'swa_' if swa_flag else ''
+
+        # Update history
+        # history = update_history(history, optimizer, epoch, train_loss, val_loss, train_auroc, val_auroc, scheduler)
+        
+        # Save model if validation metric is improved during standard training
+        if not swa_flag:
+            # best_model_wts, best_epoch_auroc, improved = save_model_if_better_auroc(model_to_save, epoch, best_epoch_auroc, best_model_wts, val_loss, val_auroc, save_path, min_eta, pre_name)
+            # count += not(improved)
+
+            # Load best weights if no improvements during "reset_count" epochs (standard train)
+            if (count % reset_count == 0 and count > 0):
+                model.load_state_dict(best_model_wts)
+                print('Best Weights loaded')
+
+        else:
+            print(f'SWA Training, epoch: {epoch}')
+    
+    model = swa.model
+
+    # Calculate batch-normalization parameters
+    update_bn(train_dataloader, model, device)
+
+    # Save SWA model
+    torch.save(model.state_dict(), save_path / ('SWA_Final_weights_epochs_' + str(epochs) + '.bin'))
+    print(f"SWA Training ended")
+
+    return model, history
+
+def train(swa, **kwargs):
+    '''
+    Function for selecting the training mode according to the entered argument
+    '''
+    if swa:
+        return swa_train(swa = swa, **kwargs)
+
+    else:
+        return standard_train(**kwargs)
+
+'''def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader = None, scheduler = None, swa = None, early_stopping = 10, early_reset = None, min_eta = 1e-3, cv_fold = None, save_path = None, from_auroc = None, config_path = None, device= torch.device('cuda')):
 
     best_model_wts = deepcopy(model.state_dict())
 
@@ -327,13 +435,7 @@ def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader 
             model_to_save = model
 
         # Update history
-        history['epoch'].append(epoch)
-        history['Train Loss'].append(train_loss)
-        history['Valid Loss'].append(val_loss)
-        history['Train AUROC'].append(train_auroc)
-        history['Valid AUROC'].append(val_auroc)
-        current_lr = scheduler.get_lr()[0] if scheduler else optimizer.param_groups[0]['lr']
-        history['lr'].append(current_lr)
+        history = update_history(history, optimizer, epoch, train_loss, val_loss, train_auroc, val_auroc, scheduler)
         
         # Save model if validation metric is improved
         if not swa_flag:
@@ -358,13 +460,13 @@ def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader 
         model = swa.model
         torch.save(model.state_dict(), save_path / ('SWA_Final_weights_epochs_' + str(epochs) + '.bin'))
         print("SWA Training ended")
-        
+
     else:   
         # load best model weights
         model.load_state_dict(best_model_wts)
         print("Best AUROC: {:.4f}".format(best_epoch_auroc))
     
-    return model, history
+    return model, history'''
 
 def get_best_auroc_scored_model(model_list):
 
@@ -373,28 +475,6 @@ def get_best_auroc_scored_model(model_list):
     best_model = model_list[np.argmax(AUROCS)]
 
     return best_model, max(AUROCS)
-
-def plot_loss(hist):
-
-    plt.style.use('seaborn-v0_8')
-    fig, ax = plt.subplots(figsize=(8,8))
-    sns.lineplot(data=hist, x='epoch', y='Train Loss', label='Train Loss', ax=ax)
-    sns.lineplot(data=hist, x='epoch', y='Valid Loss', label='Valid Loss', legend=True, ax=ax).set_title('Loss')
-
-def plot_auroc(hist):
-
-    plt.style.use('seaborn-v0_8')
-    fig, ax = plt.subplots(figsize=(8,8))
-    sns.lineplot(data=hist, x='epoch', y='Train AUROC', label='Train auroc', ax=ax)
-    sns.lineplot(data=hist, x='epoch', y='Valid AUROC', label='Valid auroc', legend=True, ax=ax).set_title('AUROC')
-
-def plot_lr(hist):
-
-    plt.style.use('seaborn-v0_8')
-    fig, ax = plt.subplots(figsize=(5,5))
-    sns.lineplot(data=hist, x='epoch', y='lr', ax=ax).set_title('Learning Rate')
-    ax.ticklabel_format(style='sci', axis='y', scilimits=(0,0))
-
 
 @torch.no_grad()
 def update_bn(loader, model, device=None):
