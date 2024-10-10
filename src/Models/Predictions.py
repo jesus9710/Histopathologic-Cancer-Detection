@@ -35,6 +35,7 @@ parser.add_argument('--output', type=str, default=str(PREDICTION_PATH), help='Sa
 parser.add_argument('--config', type=str, default=str(CONFIG_PATH), help='Config file')
 parser.add_argument('--submission-name', type=str, help='Submission file name')
 parser.add_argument('--tta', type=int, help='Enables tta predictions. set 1 for tta predictions or 0 for regular prediction')
+parser.add_argument('--swa', type=int, help='Indicates whether the model is a SWA model or not. Set 1 for SWA models or 0 for non-SWA models')
 
 args = parser.parse_args()
 
@@ -45,6 +46,7 @@ model_name = args.model_name if args.model_name else config.model.predictions.mo
 model_file = args.model_file if args.model_file else config.model.predictions.file
 submission_name = args.submission_name if args.submission_name else config.model.predictions.submission_name
 tta = args.tta if not(args.tta is None) else config.model.predictions.tta
+swa = args.swa if not(args.swa is None) else config.model.predictions.swa
 
 TEST_IMAGE_PATH = Path(args.input)
 PREDICTION_PATH = Path(args.output)

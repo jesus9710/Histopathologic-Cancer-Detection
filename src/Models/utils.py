@@ -362,24 +362,27 @@ def swa_train(model, epochs, criterion, optimizer, swa, train_dataloader, val_da
 
         # Validation and SWA parameters update
         swa.step(model, epoch)
-        # val_loss, val_auroc = swa.validate(model=model, criterion=criterion, train_loader = train_dataloader, valid_loader =val_dataloader, epoch=epoch, device=device)
         model_to_save, swa_flag = swa.get_current_model(model, epoch)
         pre_name = 'swa_' if swa_flag else ''
 
-        # Update history
-        # history = update_history(history, optimizer, epoch, train_loss, val_loss, train_auroc, val_auroc, scheduler)
-        
-        # Save model if validation metric is improved during standard training
+        # During normal training:
         if not swa_flag:
-            # best_model_wts, best_epoch_auroc, improved = save_model_if_better_auroc(model_to_save, epoch, best_epoch_auroc, best_model_wts, val_loss, val_auroc, save_path, min_eta, pre_name)
-            # count += not(improved)
 
-            # Load best weights if no improvements during "reset_count" epochs (standard train)
+            # Save model if validation metric is improved during standard training
+            val_loss, val_auroc = swa.validate(model=model, criterion=criterion, train_loader = train_dataloader, valid_loader =val_dataloader, epoch=epoch, device=device)
+            best_model_wts, best_epoch_auroc, improved = save_model_if_better_auroc(model_to_save, epoch, best_epoch_auroc, best_model_wts, val_loss, val_auroc, save_path, min_eta, pre_name)
+            count = count + 1 if not improved else 0
+
+            # Update history
+            history = update_history(history, optimizer, epoch, train_loss, val_loss, train_auroc, val_auroc, scheduler)
+
+             # Load best weights if no improvements during "reset_count" epochs (standard train)
             if (count % reset_count == 0 and count > 0):
                 model.load_state_dict(best_model_wts)
                 print('Best Weights loaded')
-
+                
         else:
+            # validation is not performed in order to reduce training time
             print(f'SWA Training, epoch: {epoch}')
     
     model = swa.model
@@ -402,71 +405,6 @@ def train(swa, **kwargs):
 
     else:
         return standard_train(**kwargs)
-
-'''def train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader = None, scheduler = None, swa = None, early_stopping = 10, early_reset = None, min_eta = 1e-3, cv_fold = None, save_path = None, from_auroc = None, config_path = None, device= torch.device('cuda')):
-
-    best_model_wts = deepcopy(model.state_dict())
-
-    pre_name = '' if from_auroc is None else 'ft_'
-    post_name = '' if cv_fold is None else f'_Fold{cv_fold}'
-    max_count = np.inf if early_stopping is None else early_stopping
-    reset_count = np.inf if early_reset is None else early_reset
-    best_epoch_auroc = -np.inf if from_auroc is None else from_auroc
-
-    history = defaultdict(list)
-    max_count = early_stopping
-    count = 0
-
-    for epoch in range(1, epochs + 1):
-        
-        # Train one epoch
-        train_loss, train_auroc = train_one_epoch(model=model, criterion=criterion, optimizer=optimizer, scheduler=scheduler, dataloader=train_dataloader, swa=swa, device=device)
-
-        if swa:
-            # Validation and SWA parameters update
-            swa.step(model, epoch)
-            val_loss, val_auroc = swa.validate(model=model, criterion=criterion, train_loader = train_dataloader, valid_loader =val_dataloader, epoch=epoch, device=device)
-            model_to_save, swa_flag = swa.get_current_model(model, epoch)
-            pre_name = 'swa_' if swa_flag else ''
-
-        else:
-            # Validation
-            val_loss, val_auroc = eval_one_epoch(model=model, criterion=criterion, dataloader=val_dataloader, device=device)
-            model_to_save = model
-
-        # Update history
-        history = update_history(history, optimizer, epoch, train_loss, val_loss, train_auroc, val_auroc, scheduler)
-        
-        # Save model if validation metric is improved
-        if not swa_flag:
-            best_model_wts, best_epoch_auroc, improved = save_model_if_better_auroc(model_to_save, epoch, best_epoch_auroc, best_model_wts, val_loss, val_auroc, save_path, min_eta, pre_name, post_name)
-            count += not(improved)
-
-        else:
-            print(f'SWA Training, epoch: {epoch}')
-        
-        # Load best model weights if no improvement during "reset_count" epochs
-        if (count % reset_count == 0 and count > 0 and swa is None):
-            model.load_state_dict(best_model_wts)
-            print('Best Weights loaded')
-
-        # Early stopping
-        if count >= max_count:
-            print('Early Stopping. Num of epochs: {:.4f}'.format(epoch))
-            break
-    
-    # Save SWA model
-    if swa_flag:
-        model = swa.model
-        torch.save(model.state_dict(), save_path / ('SWA_Final_weights_epochs_' + str(epochs) + '.bin'))
-        print("SWA Training ended")
-
-    else:   
-        # load best model weights
-        model.load_state_dict(best_model_wts)
-        print("Best AUROC: {:.4f}".format(best_epoch_auroc))
-    
-    return model, history'''
 
 def get_best_auroc_scored_model(model_list):
 

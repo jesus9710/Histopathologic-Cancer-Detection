@@ -123,8 +123,8 @@ if __name__ == '__main__':
 
     scheduler = get_scheduler(train_dataset, optimizer, config)
 
-    if config.model.parameters.SWA_enable:
-        swa_strat = SWA(model, optimizer, scheduler, config.model.parameters.SWA_lr, config.model.parameters.SWA_start)
+    if config.model.swa.SWA_enable:
+        swa_strat = SWA(model, optimizer, scheduler, config.model.swa.SWA_lr, config.model.swa.SWA_start)
     else:
         swa_strat = None
         

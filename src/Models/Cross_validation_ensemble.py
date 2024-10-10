@@ -161,7 +161,7 @@ if __name__ == '__main__':
 
         # Train models
 
-        if config.model.parameters.retrain_cv:
+        if config.model.cross_val.retrain_cv:
 
             model_list = (MODEL_CV_LOGS_PATH / ('fold' + str(fold))).iterdir()
             model_list = [f.name for f in model_list if f.is_file()]
@@ -192,6 +192,7 @@ if __name__ == '__main__':
                             early_reset= config.model.parameters.es_reset,
                             min_eta = config.model.parameters.min_eta,
                             cv_fold = fold,
+                            swa = None,
                             from_auroc= retrain_from,
                             save_path = save_path,
                             device=config.misc.device)
