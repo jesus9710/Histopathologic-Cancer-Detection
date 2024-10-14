@@ -11,31 +11,31 @@ data:
   sampling:
     n_fold : 15
     valid_downsample : True
-    downsample_quantity : 2000
+    downsample_quantity : 5000
     Random_sampling : True
-    Rnd_sampling_q : 2000
+    Rnd_sampling_q : 5000
 
 # Model configuration for training and prediction
 model:
   # Training model architecture and weights
   architecture:
-    model_class : HCD_Model_EffNet
-    model_name : efficientnetv2_rw_t.ra2_in1k
-    load_model : True
-    model_to_load : 'ft_AUROC0.9848_Loss0.1723.bin'
+    model_class : HCD_Model_ViT
+    model_name : vit_small_r26_s32_224.augreg_in21k_ft_in1k
+    load_model : False
+    model_to_load : ''
     kwargs : {}
 
   # Training model parameters
   parameters:
     freeze_params : False
-    epochs : 15
-    es_count : 15
-    es_reset : 15
+    epochs : 30
+    es_count : 5
+    es_reset : 10
     min_eta : 1.0e-3
     min_lr : 1.0e-6
     learning_rate : 1.0e-4
     weight_decay : 1.0e-5
-    scheduler : 
+    scheduler : CosineAnnealing
     retrain_from_auroc :
     save_checkpoints : True
     save_history : True
@@ -43,12 +43,13 @@ model:
 
   # Training swa configuration
   swa:
-    SWA_enable : True
+    SWA_enable : False
     SWA_lr : 1.0e-4
     SWA_start : 0
 
   # Training cross validation configuration
   cross_val:
+    cv_folds : 4
     retrain_cv : False
 
   # Prediction settings
@@ -57,19 +58,14 @@ model:
     model_name: vit_small_r26_s32_224.augreg_in21k_ft_in1k
     file: 'SWA_Final_weights_epochs_20.bin'
     swa: True
-    cv_folds: 
+    cv_folds: 1
     tta: True
-    submission_name : ''
+    submission_name : 'tta_swa_vit_small_r26_s32_01.csv'
 
   # Ensemble settings
   ensemble:
     weighted_avg : False
     weights : 
-      - 0.22
-      - 0.22
-      - 0.22
-      - 0.12
-      - 0.22
     submission_name : SWA_4xTTA_ConvNextS_EffNet_SeResNet50_SwinS3T_ViTS.csv
 
 # Miscellaneous
