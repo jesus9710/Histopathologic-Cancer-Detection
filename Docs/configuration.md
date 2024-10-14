@@ -13,7 +13,7 @@ Configuration related to data management
 - **valid_batch_size** : size of validation batch used by validation dataloader
 - **test_batch_size** : size of test batch used by test dataloader
 - **num_workers** : number of cpu cores used by dataloaders
-- **pin_memory**: boolean value. If true dataLoader will automatically put the fetched data Tensors in pinned memory
+- **pin_memory**: boolean value. If true dataLoaders will automatically put the fetched data Tensors in pinned memory
 
 ### Sampling
 
@@ -53,7 +53,7 @@ Configuration related to model training and prediction. Options available in `Ar
 
 ### Swa
 
-- **SWA_enable** : boolean value indicating whether the model will be trained using a stochastic weighted mean technique (SWA). SWA does not support cross validation ensemble &nbsp;&nbsp;&nbsp; `for training`
+- **SWA_enable** : boolean value indicating whether the model will be trained using a stochastic weighted mean technique (SWA). SWA does not support cross validation ensemble. To save time, the training history will not be updated while SWA is active. &nbsp;&nbsp;&nbsp; `for training`
 - **SWA_lr** : learning rate during SWA training &nbsp;&nbsp;&nbsp; `for training`
 - **SWA_start** : epoch from which the SWA training will begin &nbsp;&nbsp;&nbsp; `for training`
 

@@ -21,9 +21,9 @@ When running the powershell script `predict_and_ensemble.ps1`, the options avail
 
     "file": name of the file containing the model weights. File must be located in Models/<model_name>/
 
-    "swa_model": integer value indicating whether or not the model was trained with SWA. A value of 0 indicates that SWA was not applied, while a higher value indicates that it was.
+    "swa_model": integer value indicating whether or not the model was trained with SWA. A value of 0 indicates that SWA was not applied, while a higher value indicates that it was
 
-    "cv_ensemble": boolean value indicating whether the prediction will be performed with models trained with different folds (ensemble of predictions).
+    "cv_ensemble": boolean value indicating whether the prediction will be performed with models trained with different folds (ensemble of predictions)
 }
 ```
 
