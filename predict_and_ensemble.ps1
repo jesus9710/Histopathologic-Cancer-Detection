@@ -1,4 +1,4 @@
-# Cargar la configuración YAML en PowerShell (si necesitas leerla desde PowerShell)
+# Load configuration from Json
 $config = Get-Content "ensemble_config.json" | ConvertFrom-Json
 $input_dir = Resolve-Path $config.input_dir
 $predictions_dir = Resolve-Path $config.predictions_dir
@@ -9,10 +9,13 @@ $idx = 1
 $env:NO_ALBUMENTATIONS_UPDATE = "1"
 
 if ($config.do_ensemble) {
+
+    # Prediction loop
     foreach ($model in $config.ensemble) {
         Write-Output "`nPredicting with model: $($model.model_name)`n"
         $submission_name = $model.model_name + "_$($idx)" + ".csv"
 
+        # Cross validation ensemble predictions
         if ($model.cv_ensemble){
             python src/Models/Predict_CV_ensemble.py `
             --model-type $model.model_class `
@@ -23,6 +26,7 @@ if ($config.do_ensemble) {
             --submission-name $submission_name
         }
 
+        # Model predictions
         else {
             python src/Models/Predictions.py `
             --model-type $model.model_class `
@@ -37,8 +41,10 @@ if ($config.do_ensemble) {
         $idx ++
     }
 
+    # Ensemble model
     Write-Output "`nEnsembling models"
 
+    # Weighted average ensemble
     if ($config.weighted_average) {
         python src/Models/Ensemble_predictions.py `
         --weighted-avg 1 `
@@ -48,6 +54,7 @@ if ($config.do_ensemble) {
         --submission-name $config.submission_name
     }
     
+    # Simple average ensemble
     else {
         python src/Models/Ensemble_predictions.py `
         --input $predictions_dir `
