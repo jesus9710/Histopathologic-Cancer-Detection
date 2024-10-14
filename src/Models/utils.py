@@ -332,7 +332,8 @@ def save_model_if_better_auroc(model, epoch, best_epoch_auroc, best_model_wts, v
         best_model_wts = deepcopy(model.state_dict())
         FILE = pre_name + "AUROC{:.4f}_Loss{:.4f}".format(val_auroc, val_loss) + post_name + ".bin"
         
-        torch.save(model.state_dict(), save_path / FILE)
+        if save_path is not None:
+            torch.save(model.state_dict(), save_path / FILE)
 
         flag = 1
 

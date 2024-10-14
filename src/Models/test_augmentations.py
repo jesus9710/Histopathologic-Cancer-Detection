@@ -191,8 +191,6 @@ scores_2 = []
 
 for fold in range(n_folds):
 
-    
-
     df_train = df[df.kfold != fold].reset_index(drop=True)
     df_valid = df[df.kfold == fold].reset_index(drop=True)
 
@@ -202,7 +200,7 @@ for fold in range(n_folds):
 
     print("Training model_1:\n")
 
-    model_1, history_1 = train(model, epochs = epochs, criterion = criterion, optimizer = optimizer, train_dataloader = train_loader_1, val_dataloader = valid_loader_1, early_stopping = 10)
+    model_1, history_1 = train(model = model, epochs = epochs, criterion = criterion, optimizer = optimizer, swa=None, train_dataloader = train_loader_1, val_dataloader = valid_loader_1, early_stopping = 10)
 
     print('\n')
 
@@ -210,7 +208,7 @@ for fold in range(n_folds):
 
     print("Training model_2:\n")
 
-    model_2, history_2 = train(model, epochs = epochs, criterion = criterion, optimizer = optimizer, train_dataloader = train_loader_2, val_dataloader = valid_loader_2, early_stopping = 10)
+    model_2, history_2 = train(model = model, epochs = epochs, criterion = criterion, optimizer = optimizer, swa=None, train_dataloader = train_loader_2, val_dataloader = valid_loader_2, early_stopping = 10)
 
     print('\n')
 
@@ -222,4 +220,3 @@ score_2 = np.mean(scores_2)
 
 print("Mean CV auroc score with transformation set 1: {:.4f}".format(score_1))
 print("Mean CV auroc score with transformation set 2: {:.4f}".format(score_2))
-# %%
