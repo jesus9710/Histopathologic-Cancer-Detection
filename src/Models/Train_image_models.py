@@ -34,7 +34,7 @@ ID_WSI_PATH = ROOT_PATH / 'Data/raw-metadata/patch_id_wsi_full.csv'
 SUBMISSION_PATH = ROOT_PATH / 'Submissions'
 MODEL_LOGS_PATH = ROOT_PATH / 'Models/' / (config.model.architecture.model_name + '/')
 
-# set_seed(config.misc.seed)
+set_seed(config.misc.seed)
 
 # %% load data
 
@@ -54,7 +54,8 @@ df.kfold = df.kfold.astype('int')
 
 # %% Augmentations
 
-data_transforms = get_transforms(config.data.parameters.img_size)
+train_data_transforms = get_transforms(config.data.parameters.img_size, validation=False)
+valid_data_transforms = get_transforms(config.data.parameters.img_size, validation=True)
 
 # %% Training
 
@@ -107,12 +108,12 @@ if __name__ == '__main__':
         df_valid = pd.concat([df_positive, df_negative], axis=0).reset_index(drop=True)
 
     if config.data.sampling.Random_sampling:
-        train_dataset = HCD_Dataset_for_training(TRAIN_IMAGES_PATH, df_train, data_size=config.data.sampling.Rnd_sampling_q, transforms=data_transforms["train"])
+        train_dataset = HCD_Dataset_for_training(TRAIN_IMAGES_PATH, df_train, data_size=config.data.sampling.Rnd_sampling_q, transforms=train_data_transforms)
 
     else:
-        train_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_train, transforms=data_transforms["train"])
+        train_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_train, transforms=train_data_transforms)
 
-    valid_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_valid, transforms=data_transforms["valid"])
+    valid_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_valid, transforms=valid_data_transforms)
 
     train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.data.parameters.train_batch_size, 
                                 num_workers=config.data.parameters.num_workers, pin_memory=config.data.parameters.pin_memory, shuffle=True, drop_last=False)

@@ -37,7 +37,7 @@ MODEL_CV_LOGS_PATH = ROOT_PATH / 'Models/Cross Val Ensemble/' / (config.model.ar
 
 SUBMISSION_PATH = ROOT_PATH / 'Submissions'
 
-# set_seed(config.misc.seed)
+set_seed(config.misc.seed)
 
 # %% load data
 
@@ -57,7 +57,8 @@ df.kfold = df.kfold.astype('int')
 
 # %% Augmentations
 
-data_transforms = get_transforms(config.data.parameters.img_size)
+train_data_transforms = get_transforms(config.data.parameters.img_size, validation=False)
+valid_data_transforms = get_transforms(config.data.parameters.img_size, validation=True)
 
 # %% Modelling
 
@@ -72,7 +73,7 @@ if __name__ == '__main__':
 
         original_state_dict = model.state_dict()
 
-    # Load model
+    # load model
 
     checkpoint_path = MODEL_LOGS_PATH / config.model.architecture.model_to_load
 
@@ -96,19 +97,18 @@ if __name__ == '__main__':
     optimizer = torch.optim.Adam(model.parameters(), lr=config.model.parameters.learning_rate, 
                         weight_decay=config.model.parameters.weight_decay)
 
-    # Training
+    # training
 
     scores = []
 
     if config.model.parameters.save_checkpoints:
         os.makedirs(MODEL_CV_LOGS_PATH, exist_ok=True)
 
-    for fold in range(config.model.predictions.cv_folds):
+    for fold in range(config.model.cross_val.cv_folds):
 
         print("\nTraining fold " + str(fold) + ":\n")
 
         # create datasets and dataloaders
-
         df_train = df[df.kfold == (fold+1)].reset_index(drop=True)
         df_valid = df[df.kfold == fold].reset_index(drop=True)
 
@@ -124,12 +124,12 @@ if __name__ == '__main__':
             df_valid = pd.concat([df_positive, df_negative], axis=0).reset_index(drop=True)
 
         if config.data.sampling.Random_sampling:
-            train_dataset = HCD_Dataset_for_training(TRAIN_IMAGES_PATH, df_train, data_size=config.data.sampling.Rnd_sampling_q, transforms=data_transforms["train"])
+            train_dataset = HCD_Dataset_for_training(TRAIN_IMAGES_PATH, df_train, data_size=config.data.sampling.Rnd_sampling_q, transforms=train_data_transforms)
 
         else:
-            train_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_train, transforms=data_transforms["train"])
+            train_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_train, transforms=train_data_transforms)
 
-        valid_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_valid, transforms=data_transforms["valid"])
+        valid_dataset = HCD_Dataset(TRAIN_IMAGES_PATH, df_valid, transforms=valid_data_transforms)
 
         train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=config.data.parameters.train_batch_size, 
                                     num_workers=config.data.parameters.num_workers, pin_memory=config.data.parameters.pin_memory, shuffle=True, drop_last=False)
@@ -137,30 +137,9 @@ if __name__ == '__main__':
                                     num_workers=config.data.parameters.num_workers, pin_memory=config.data.parameters.pin_memory, shuffle=False, drop_last=False)
         
         # lr scheduler
+        scheduler = get_scheduler(train_dataset, optimizer, config)
 
-        if config.model.parameters.scheduler == 'CosineAnnealing':
-
-            if config.data.sampling.Random_sampling:
-
-                T_max = config.data.sampling.Rnd_sampling_q * config.model.parameters.epochs // config.data.parameters.train_batch_size
-                
-            else:
-
-                T_max = df.shape[0] * (config.data.sampling.n_fold-1) * config.model.parameters.epochs // config.data.parameters.train_batch_size // config.data.sampling.n_fold
-            
-            scheduler = lr_scheduler.CosineAnnealingLR(optimizer, T_max=T_max, eta_min=config.model.parameters.min_lr)
-
-
-        elif config.model.parameters.scheduler == 'OneCycle':
-
-            scheduler = lr_scheduler.OneCycleLR(optimizer, max_lr=config.model.parameters.learning_rate, epochs=config.model.parameters.epochs, steps_per_epoch=int(np.floor(len(train_dataset)/config.data.parameters.train_batch_size)))
-
-        else:
-
-            scheduler = None
-
-        # Train models
-
+        # train models
         if config.model.cross_val.retrain_cv:
 
             model_list = (MODEL_CV_LOGS_PATH / ('fold' + str(fold))).iterdir()
@@ -181,7 +160,7 @@ if __name__ == '__main__':
         else:
             save_path = None
 
-        model, history = train(model,
+        model, history = train(model = model,
                             epochs = config.model.parameters.epochs,
                             criterion = criterion,
                             optimizer = optimizer,
@@ -200,4 +179,3 @@ if __name__ == '__main__':
         scores.append(max(history["Valid AUROC"]))
 
     print('CV Score: {:.4f}'.format(np.mean(scores)))
-# %%

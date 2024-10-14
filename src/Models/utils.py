@@ -16,15 +16,27 @@ import gc
 import yaml
 
 class Dotenv:
+    """
+    This class is designed to convert dictionaries into objects with attributes that can be accessed via dot notation.
+    If any value in the dictionary is another dictionary, it recursively converts it into another Dotenv object,
+    allowing for nested dictionaries to also be accessed using dot notation.
+    """
+
     def __init__(self, dictionary):
+
         dict_variables = ['kwargs']
         self.__dict__.update(dictionary)
+
         for key, value in self.__dict__.items():
+
             if isinstance(value, dict):
                 if not(key in dict_variables):
                     self.__dict__[key] = Dotenv(value)
 
 class HCD_Dataset_for_training(torch.utils.data.Dataset):
+    """
+    Dataset class for training models for Histopathologic Cancer Detection competition
+    """
 
     def __init__(self, data_path, df, data_size, transforms = None):
 
@@ -52,6 +64,7 @@ class HCD_Dataset_for_training(torch.utils.data.Dataset):
 
         if self.transforms:
             image = self.transforms(image=image)["image"]
+
         else:
             transform = transforms_v2.ToTensor()
             image = transform(image)
@@ -59,6 +72,9 @@ class HCD_Dataset_for_training(torch.utils.data.Dataset):
         return {'image': image.float(), 'target': label.float()}
 
 class HCD_Dataset(torch.utils.data.Dataset):
+    """
+    Dataset class for Histopathologic Cancer Detection competition
+    """
 
     def __init__(self, data_path, df, transforms = None):
 
@@ -80,6 +96,7 @@ class HCD_Dataset(torch.utils.data.Dataset):
 
         if self.transforms:
             image = self.transforms(image=image)["image"]
+
         else:
             transform = transforms_v2.ToTensor()
             image = transform(image)
@@ -87,6 +104,9 @@ class HCD_Dataset(torch.utils.data.Dataset):
         return {'image': image.float(), 'target': label.float()}
 
 class SWA:
+    """
+    This class implements the initialization and update for the stochastic weighted average model
+    """
     
     def __init__(self, model, optimizer, scheduler, learning_rate, start):
 
@@ -96,6 +116,9 @@ class SWA:
         self.scheduler  = scheduler
 
     def step(self, model, epoch):
+        """
+        SWA model actualization
+        """
         if epoch == self.start:
             self.model = torch.optim.swa_utils.AveragedModel(model=model)
 
@@ -107,6 +130,9 @@ class SWA:
           self.scheduler.step()
 
     def validate(self, model, train_loader, valid_loader, criterion, epoch, device):
+        """
+        SWA model validation (one epoch)
+        """
 
         if epoch > self.start:
             update_bn(train_loader, self.model, device)
@@ -118,6 +144,9 @@ class SWA:
         return val_loss, val_auroc
     
     def get_current_model(self, model, epoch):
+        """
+        Returns the SWA model if SWA training is active. Otherwise, returns the standard model
+        """
         
         if epoch > self.start:
             return self.model, 1
@@ -126,6 +155,9 @@ class SWA:
             return model, 0
 
 def load_config(config_path):
+    """
+    Function for creating a configuration object from a .yml file
+    """
 
     with open(config_path, 'r', encoding='utf-8') as file:
         config = yaml.safe_load(file)
@@ -137,6 +169,9 @@ def load_config(config_path):
     return config
 
 def set_seed(seed=42):
+    """
+    Set seed for reproducibility
+    """
 
     np.random.seed(seed)
     torch.manual_seed(seed)
@@ -146,6 +181,9 @@ def set_seed(seed=42):
     os.environ['PYTHONHASHSEED'] = str(seed)
 
 def get_Tmax(dataset, config):
+    """
+    Gets the maximum number of iterations for the cosine annealing scheduler from configuration object
+    """
 
     if config.data.sampling.Random_sampling:
         T_max = config.data.sampling.Rnd_sampling_q * config.model.parameters.epochs // config.data.parameters.train_batch_size
@@ -159,6 +197,9 @@ def get_Tmax(dataset, config):
     return T_max
 
 def get_scheduler(dataset, optimizer, config):
+    """
+    Get scheduler from configuration object
+    """
 
     if config.model.parameters.scheduler == 'CosineAnnealing':
         T_max = get_Tmax(dataset, config)
@@ -183,6 +224,9 @@ def get_scheduler(dataset, optimizer, config):
     return scheduler
 
 def train_one_epoch(model, criterion, optimizer, dataloader, scheduler = None, device = torch.device('cuda')):
+    """
+    Model training function (one epoch)
+    """
 
     model.train()
 
@@ -221,6 +265,9 @@ def train_one_epoch(model, criterion, optimizer, dataloader, scheduler = None, d
     return loss, auroc
 
 def eval_one_epoch(model, criterion, dataloader, device=torch.device('cuda')):
+    """
+    Model evaluation function (one epoch)
+    """
 
     model.eval()
     loss_hist = []
@@ -251,6 +298,9 @@ def eval_one_epoch(model, criterion, dataloader, device=torch.device('cuda')):
     return loss, auroc
 
 def predict_model(model, dataloader, device=torch.device('cuda')):
+    """
+    Model prediction function
+    """
 
     model.eval()
 
@@ -270,6 +320,9 @@ def predict_model(model, dataloader, device=torch.device('cuda')):
     return soft_preds
 
 def save_model_if_better_auroc(model, epoch, best_epoch_auroc, best_model_wts, val_loss, val_auroc, save_path, min_eta = 0, pre_name = '', post_name= ''):
+    """
+    Function for saving the weights of the model if auroc is improved
+    """
 
     if (best_epoch_auroc + min_eta) <= val_auroc:
 
@@ -290,6 +343,9 @@ def save_model_if_better_auroc(model, epoch, best_epoch_auroc, best_model_wts, v
     return best_model_wts, best_epoch_auroc, flag
 
 def update_history(history, optimizer, epoch, train_loss = None, val_loss = None, train_auroc = None, val_auroc = None, scheduler = None):
+    """
+    Training history update function
+    """
 
     current_lr = scheduler.get_lr()[0] if scheduler else optimizer.param_groups[0]['lr']
 
@@ -303,6 +359,9 @@ def update_history(history, optimizer, epoch, train_loss = None, val_loss = None
     return history
 
 def standard_train(model, epochs, criterion, optimizer, train_dataloader, val_dataloader = None, scheduler = None, early_stopping = 10, early_reset = None, min_eta = 1e-3, cv_fold = None, save_path = None, from_auroc = None, device= torch.device('cuda'), **kwargs):
+    """
+    Model training function
+    """
 
     best_model_wts = deepcopy(model.state_dict())
 
@@ -347,6 +406,9 @@ def standard_train(model, epochs, criterion, optimizer, train_dataloader, val_da
     return model, history
 
 def swa_train(model, epochs, criterion, optimizer, swa, train_dataloader, val_dataloader = None, scheduler = None, early_reset = None, min_eta = 1e-3, save_path = None, from_auroc = None, device= torch.device('cuda'), **kwargs):
+    """
+    Function for training a model with the stochastic weighted average technique
+    """
 
     best_model_wts = deepcopy(model.state_dict())
     best_epoch_auroc = -np.inf if from_auroc is None else from_auroc
@@ -396,17 +458,21 @@ def swa_train(model, epochs, criterion, optimizer, swa, train_dataloader, val_da
 
     return model, history
 
-def train(swa, **kwargs):
-    '''
+def train(**kwargs):
+    """
     Function for selecting the training mode according to the entered argument
-    '''
-    if swa:
-        return swa_train(swa = swa, **kwargs)
+    """
+
+    if kwargs['swa']:
+        return swa_train(**kwargs)
 
     else:
         return standard_train(**kwargs)
 
 def get_best_auroc_scored_model(model_list):
+    """
+    Function to obtain the weights that have provided the best validation auroc
+    """
 
     AUROCS =[float(file.split(sep='AUROC')[-1].split(sep='_')[0]) for file in model_list]
 
@@ -416,6 +482,9 @@ def get_best_auroc_scored_model(model_list):
 
 @torch.no_grad()
 def update_bn(loader, model, device=None):
+    """
+    Modified version of torch.optim.swa_utils.update_bn(). The input is accessed through the 'image' key of the data dictionary.
+    """
 
     momenta = {}
     for module in model.modules():

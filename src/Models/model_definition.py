@@ -318,7 +318,7 @@ class HCD_Model_FPN(torch.nn.Module):
 
         return output
 
-# Diccionario para mapear configuración y clases
+# Dictionary for mapping configuration and classes
 maping_model = {"HCD_Model_ResNet" : HCD_Model_ResNet,
                "HCD_Model_EVA02"  : HCD_Model_EVA02,
                "HCD_Model_EffNet" : HCD_Model_EffNet,

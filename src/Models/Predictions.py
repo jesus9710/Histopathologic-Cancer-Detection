@@ -1,4 +1,4 @@
-#%% libs
+# %% libs
 
 import numpy as np
 import pandas as pd
@@ -63,7 +63,7 @@ if tta:
     transforms = get_tta_transforms(config.data.parameters.img_size)
 
 else:
-    transforms = [get_transforms(config.data.parameters.img_size)['valid']]
+    transforms = [get_transforms(config.data.parameters.img_size, validation=True)]
 
 # %% Predictions
 
@@ -73,7 +73,7 @@ if __name__ == '__main__':
 
     model = maping_model[model_type](model_name=model_name, pretrained=False, device = config.misc.device)
 
-    model = torch.optim.swa_utils.AveragedModel(model) if config.model.predictions.swa else model
+    model = torch.optim.swa_utils.AveragedModel(model) if swa else model
 
     save_state = torch.load(MODEL_LOGS_PATH)
 
@@ -112,5 +112,3 @@ if __name__ == '__main__':
     submission_name = PREDICTION_PATH / submission_name
 
     submission.to_csv(submission_name, index=False)
-
-# %%

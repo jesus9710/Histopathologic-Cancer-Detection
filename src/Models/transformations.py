@@ -1,10 +1,11 @@
 import albumentations as A
 from albumentations.pytorch.transforms import ToTensorV2
 
-def get_transforms(image_size):
+def get_transforms(image_size, validation = False):
 
-    data_transforms = {
-        "train": A.Compose([
+    if not validation:
+
+        data_transforms = A.Compose([
             A.VerticalFlip(p=0.5),
             A.RandomRotate90(p=0.5),
             A.HorizontalFlip(p=0.5),
@@ -26,18 +27,19 @@ def get_transforms(image_size):
                     max_pixel_value=255.0, 
                     p=1.0
                 ),
-            ToTensorV2()], p=1.),
-        
-        "valid": A.Compose([
+            ToTensorV2()], p=1.)
+    
+    else:
+
+        data_transforms = A.Compose([
             A.Resize(image_size, image_size),
             A.Normalize(
-                    mean=[0.485, 0.456, 0.406], 
-                    std=[0.229, 0.224, 0.225], 
-                    max_pixel_value=255.0, 
-                    p=1.0
+                mean=[0.485, 0.456, 0.406], 
+                std=[0.229, 0.224, 0.225], 
+                max_pixel_value=255.0, 
+                p=1.0
                 ),
             ToTensorV2()], p=1.)
-    }
 
     return data_transforms
 

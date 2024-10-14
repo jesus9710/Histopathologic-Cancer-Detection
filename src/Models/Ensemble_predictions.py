@@ -40,7 +40,7 @@ CONFIG_PATH =  Path(args.config)
 config = load_config(CONFIG_PATH)
 
 weighted_avg = args.weighted_avg if args.weighted_avg else config.model.ensemble.weighted_avg
-weights = [float(w) for w in args.weights.split(sep=' ')] if args.weights else config.model.ensemble.weights
+weights = [float(w.replace(',','.')) for w in args.weights.split(sep=' ')] if args.weights else config.model.ensemble.weights
 submission_name = args.submission_name if args.submission_name else config.model.ensemble.submission_name
 
 # %% submissions to ensemble
@@ -69,5 +69,3 @@ df_test = df_test[['id','label']]
 # %% submission
 
 df_test.to_csv(ENSEMBLE_SUBMISSION_PATH / submission_name, index=False)
-
-# %%

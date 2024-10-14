@@ -37,19 +37,30 @@ if ($config.do_ensemble) {
         $idx ++
     }
 
-    Write-Output "Ensembling models`n"
+    Write-Output "`nEnsembling models"
 
-    python src/Models/Ensemble_predictions.py `
-        --weighted_avg $config.weighted_average `
+    if ($config.weighted_average) {
+        python src/Models/Ensemble_predictions.py `
+        --weighted-avg 1 `
         --weights $weights `
         --input $predictions_dir `
         --output $output_dir `
         --submission-name $config.submission_name
+    }
+    
+    else {
+        python src/Models/Ensemble_predictions.py `
+        --input $predictions_dir `
+        --output $output_dir `
+        --submission-name $config.submission_name
+    }
+
+    Write-Output "`nEnsemble Submission saved in $output_dir"
 
     if ( -not ($config.keep_submissions)) {
 
         Remove-Item "$predictions_dir\*"
-        Write-Output "Removed single model predictions"
+        Write-Output "`nRemoved single model predictions`n"
             
     }
 }

@@ -63,7 +63,7 @@ if config.model.predictions.tta:
 
 else:
 
-    transforms = [get_transforms(config.data.parameters.img_size)['valid']]
+    transforms = [get_transforms(config.data.parameters.img_size, validation=True)]
 
 # %% Load data
 
@@ -77,16 +77,18 @@ if __name__ == '__main__':
 
     submissions_dict = {'id': df_test['id']}
 
-    for idx, fold in enumerate(range(config.data.sampling.n_fold-1)):
+    for idx, fold in enumerate(range(config.model.predictions.cv_folds)):
 
         print(f'\nPredicting fold {idx}\n')
 
+        # get best weights
         model_list = (MODEL_CV_LOGS_PATH / ('fold' + str(fold))).iterdir()
         model_list = [f.name for f in model_list if f.is_file()]
         best_model, best_auroc = get_best_auroc_scored_model(model_list)
 
         checkpoint_path = MODEL_CV_LOGS_PATH / ('fold' + str(idx)) / best_model
 
+        # instantiate the model and load best weights
         model = maping_model[model_type](model_name = model_name, pretrained=False, device = config.misc.device)
         model.to(config.misc.device)
         state_dict = torch.load(checkpoint_path)
@@ -94,6 +96,7 @@ if __name__ == '__main__':
 
         submission_df_tta = pd.DataFrame({'id':df_test['id']})
         
+        # predictions
         for ix, transform in enumerate(transforms):
 
             test_dataset = HCD_Dataset(TEST_IMAGE_PATH, df_test, transforms=transform)
@@ -119,5 +122,4 @@ if __name__ == '__main__':
     submission = submission[['id','label']]
 
     # Submission
-
     submission.to_csv(PREDICTION_PATH / submission_name, index=False)
