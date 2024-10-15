@@ -54,7 +54,7 @@ MODEL_LOGS_PATH = ROOT_PATH / 'Models/' / model_name / model_file
 
 # %% load data
 
-test_files = [file.name.split(sep='.')[0] for file in TEST_IMAGE_PATH.iterdir()]
+test_files = [file.name.split(sep='.')[0] for file in TEST_IMAGE_PATH.glob('*.tif')]
 test_df = pd.DataFrame({'id':test_files, 'label':np.ones(len(test_files))*np.nan})
 
 # %% Transformations

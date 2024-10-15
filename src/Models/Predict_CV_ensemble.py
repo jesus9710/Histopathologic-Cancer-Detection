@@ -67,7 +67,7 @@ else:
 
 # %% Load data
 
-df_test = [file.name for file in TEST_IMAGE_PATH.iterdir() if file.is_file()]
+df_test = [file.name for file in TEST_IMAGE_PATH.glob('*.tif') if file.is_file()]
 df_test = [file.split(sep='.')[0] for file in df_test]
 df_test = pd.DataFrame({'id':df_test,'label':np.ones(len(df_test))*np.nan})
 
