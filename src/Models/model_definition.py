@@ -27,8 +27,7 @@ class HCD_Simple_Model(torch.nn.Module):
         self.pool1 = torch.nn.MaxPool2d(kernel_size=2, stride=2)
         self.conv2 = torch.nn.Conv2d(6, 16, kernel_size=3)
         self.GeM_pooling = GeM()
-        # Capa completamente conectada (fully connected)
-        self.fc = torch.nn.Linear(16 , num_classes)  # Ajustar según tamaño de la imagen
+        self.fc = torch.nn.Linear(16 , num_classes)
         self.sigmoid = torch.nn.Sigmoid()
 
     def forward(self,x):
